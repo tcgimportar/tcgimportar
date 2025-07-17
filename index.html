@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control de Inventario TCG</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Placeholder Comments -->
+    <!-- Chosen Palette: Warm Neutrals with Subtle Blue Accents -->
+    <!-- Application Structure Plan: A single-page dashboard layout. Top section for KPIs (total value, item count). Main area with a filter panel (by brand, collection, type) and a dynamic, sortable inventory table. A bottom section with charts (pie chart for brand distribution, bar chart for value by collection). This structure provides an immediate overview, allows for detailed exploration via filtering/sorting, and offers visual synthesis through charts, which is more intuitive than a raw spreadsheet. -->
+    <!-- Visualization & Content Choices: Data from the report is stored in a JS array. KPIs (Inform): HTML cards updated by JS. Inventory Table (Organize/Compare): Dynamic HTML table with JS sorting/filtering. Distribution Chart (Compare): Chart.js Pie Chart showing stock value by brand. Value Chart (Compare): Chart.js Bar Chart showing stock value by top collections. All interactions are handled by vanilla JS to update the views. This meets the goal of making data explorable and understandable. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa; /* Color de fondo claro y neutro */
+        }
+        .kpi-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 350px;
+            max-height: 400px;
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        /* Estilo para la cabecera de la tabla fija */
+        .table-header-sticky {
+            position: sticky;
+            top: 0;
+            background-color: #f1f5f9;
+            z-index: 10;
+        }
+        /* Estilo para el icono de ordenación */
+        .sort-icon {
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        .sort-icon.active {
+            opacity: 1;
+        }
+        .sort-icon:hover {
+            opacity: 1;
+        }
+        .form-section {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            margin-top: 2rem;
+        }
+        .quantity-control {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .quantity-button {
+            background-color: #e2e8f0;
+            color: #4a5568;
+            border: none;
+            border-radius: 0.375rem;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        .quantity-button:hover {
+            background-color: #cbd5e0;
+        }
+        .quantity-display {
+            min-width: 2rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <!-- Encabezado -->
+        <header class="mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Panel de Control de Inventario TCG</h1>
+            <p class="text-lg text-gray-600 mt-1">Un resumen interactivo de tu stock actual.</p>
+        </header>
+
+        <!-- Sección de KPIs (Indicadores Clave de Rendimiento) -->
+        <section id="kpi-section" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Las tarjetas de KPIs se generarán aquí con JS -->
+        </section>
+
+        <!-- Sección de Filtros y Tabla -->
+        <main class="bg-white p-6 rounded-xl shadow-lg">
+            
+            <!-- Controles de Filtro -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-end">
+                <div>
+                    <label for="brand-filter" class="block text-sm font-medium text-gray-700">Filtrar por Marca</label>
+                    <select id="brand-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <!-- Opciones generadas por JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="collection-filter" class="block text-sm font-medium text-gray-700">Filtrar por Colección</label>
+                    <select id="collection-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <!-- Opciones generadas por JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="expansion-filter" class="block text-sm font-medium text-gray-700">Filtrar por Expansión</label>
+                    <select id="expansion-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <!-- Opciones generadas por JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="item-filter" class="block text-sm font-medium text-gray-700">Filtrar por Artículo</label>
+                    <select id="item-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <!-- Opciones generadas por JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="search-input" class="block text-sm font-medium text-gray-700">Buscar por Comentarios</label>
+                    <input type="text" id="search-input" placeholder="Ej: Shiny Mewtwo..." class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                </div>
+            </div>
+
+            <!-- Contenedor de la Tabla de Inventario -->
+            <div class="overflow-x-auto max-h-[60vh] relative">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="table-header-sticky">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="marca">Marca</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="coleccion">Colección</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="expansion">Expansión</th> <!-- New column header -->
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="articulo">Artículo</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Comentarios</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="cantidad">Stock</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="costo">Costo (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="costoNeto">Costo Neto (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="venta">Venta (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="ventaArs">Venta (ARS)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="margenGanancia">Margen de Ganancia (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Acciones</th> <!-- New column for delete button -->
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Filas generadas por JS -->
+                    </tbody>
+                </table>
+                 <div id="no-results" class="text-center py-10 text-gray-500 hidden">
+                    No se encontraron resultados para los filtros aplicados.
+                </div>
+            </div>
+
+        </main>
+        
+        <!-- Sección para Agregar Stock -->
+        <section class="form-section">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Agregar Nuevo Stock</h2>
+            <div class="mb-4 text-sm text-gray-700">
+                Valor actual del Dólar Blue para cálculos (editable): 
+                <input type="number" id="dolar-blue-input" value="1000" step="0.01" class="inline-block w-24 px-2 py-1 border border-gray-300 rounded-md text-center"> ARS
+            </div>
+            <form id="add-stock-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                    <label for="new-marca" class="block text-sm font-medium text-gray-700">Marca</label>
+                    <select id="new-marca" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" required>
+                        <!-- Opciones generadas por JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="new-coleccion" class="block text-sm font-medium text-gray-700">Colección</label>
+                    <select id="new-coleccion" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" required>
+                        <!-- Opciones generadas por JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="new-expansion" class="block text-sm font-medium text-gray-700">Expansión</label>
+                    <input type="text" id="new-expansion" list="expansions-datalist" placeholder="Ej: Paldean Fates" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" required>
+                    <datalist id="expansions-datalist">
+                        <!-- Options populated by JS -->
+                    </datalist>
+                </div>
+                <div>
+                    <label for="new-articulo" class="block text-sm font-medium text-gray-700">Artículo</label>
+                    <select id="new-articulo" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" required>
+                        <!-- Opciones generadas por JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="new-comentarios" class="block text-sm font-medium text-gray-700">Comentarios</label>
+                    <input type="text" id="new-comentarios" placeholder="Ej: Shiny Mewtwo" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                </div>
+                <div>
+                    <label for="new-idioma" class="block text-sm font-medium text-gray-700">Idioma</label>
+                    <select id="new-idioma" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" required>
+                        <!-- Opciones generadas por JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="new-cantidad" class="block text-sm font-medium text-gray-700">Cantidad en Stock</label>
+                    <input type="number" id="new-cantidad" min="0" placeholder="Ej: 10" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" required>
+                </div>
+                <div>
+                    <label for="new-costo" class="block text-sm font-medium text-gray-700">Costo Unitario (USD)</label>
+                    <input type="number" id="new-costo" step="0.01" min="0" placeholder="Ej: 45.50" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" required>
+                </div>
+                <div>
+                    <label for="new-costo-neto" class="block text-sm font-medium text-gray-700">Costo Neto (USD)</label>
+                    <input type="number" id="new-costo-neto" step="0.01" min="0" class="mt-1 block w-full pl-3 py-2 text-base bg-gray-100 border-gray-300 rounded-md" readonly>
+                </div>
+                <div>
+                    <label for="new-venta" class="block text-sm font-medium text-gray-700">Precio Venta (USD)</label>
+                    <input type="number" id="new-venta" step="0.01" min="0" placeholder="Ej: 65.00" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" required>
+                </div>
+                <div>
+                    <label for="new-venta-ars" class="block text-sm font-medium text-gray-700">Precio Venta (ARS)</label>
+                    <input type="number" id="new-venta-ars" step="0.01" min="0" class="mt-1 block w-full pl-3 py-2 text-base bg-gray-100 border-gray-300 rounded-md" readonly>
+                </div>
+                <div>
+                    <label for="new-margen-ganancia" class="block text-sm font-medium text-gray-700">Margen de Ganancia (USD)</label>
+                    <input type="number" id="new-margen-ganancia" step="0.01" min="0" class="mt-1 block w-full pl-3 py-2 text-base bg-gray-100 border-gray-300 rounded-md" readonly>
+                </div>
+                <div>
+                    <label for="new-estado" class="block text-sm font-medium text-gray-700">Estado</label>
+                    <select id="new-estado" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md" required>
+                        <!-- Opciones generadas por JS -->
+                    </select>
+                    <!-- Clarification for Costo Neto -->
+                    <p class="text-xs text-gray-500 mt-1">El Costo Neto está calculado como el Costo Unitario más el 20%.</p>
+                </div>
+                <div class="lg:col-span-3 flex justify-end mt-4">
+                    <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Agregar Stock
+                    </button>
+                </div>
+            </form>
+            <div id="form-message" class="mt-4 text-center text-sm font-medium hidden"></div>
+        </section>
+
+        <!-- Sección de Gráficos -->
+        <section class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="chart-container">
+                <h3 class="text-lg font-semibold mb-4 text-center">Valor de Stock por Marca</h3>
+                <canvas id="brandChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="text-lg font-semibold mb-4 text-center">Top 5 Colecciones por Valor de Stock</h3>
+                <canvas id="collectionChart"></canvas>
+            </div>
+        </section>
+    </div>
+
+    <script type="module">
+        // --- FIREBASE IMPORTS ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+        // --- FIREBASE CONFIGURATION ---
+        // IMPORTANTE: Si ejecutas esto localmente (fuera del entorno de Canvas o GitHub Pages),
+        // DEBES reemplazar el contenido de firebaseConfig con la configuración de tu propio proyecto de Firebase.
+        // Puedes obtenerla desde la Consola de Firebase -> Configuración del proyecto -> Tus apps -> Web.
+        const firebaseConfig = {
+          apiKey: "AIzaSyBrdeZI_MmSGJN78c7QrLNoq2JehAuxdZo",
+          authDomain: "tcg-import-ar.firebaseapp.com",
+          projectId: "tcg-import-ar",
+          storageBucket: "tcg-import-ar.firebasestorage.app",
+          messagingSenderId: "301376070433",
+          appId: "1:301376070433:web:dc11b17cbfce23f5d4d460",
+          measurementId: "G-2YT0YYQJ56"
+        };
+
+        // Declarar las variables app, db, auth globalmente
+        let app;
+        let db;
+        let auth;
+
+        let userId = null;
+        let isAuthReady = false; // Flag to indicate if authentication is ready
+
+        // --- GLOBAL STATE & ELEMENTS ---
+        let inventoryData = []; // This will now be populated by Firestore
+        let currentSort = { column: 'marca', order: 'asc' };
+        const kpiSection = document.getElementById('kpi-section');
+        const tableBody = document.getElementById('inventory-table-body');
+        const brandFilter = document.getElementById('brand-filter');
+        const collectionFilter = document.getElementById('collection-filter');
+        const expansionFilter = document.getElementById('expansion-filter');
+        const itemFilter = document.getElementById('item-filter');
+        const searchInput = document.getElementById('search-input');
+        const noResultsDiv = document.getElementById('no-results');
+
+        // New stock form elements
+        const addStockForm = document.getElementById('add-stock-form');
+        const newMarcaSelect = document.getElementById('new-marca');
+        const newColeccionSelect = document.getElementById('new-coleccion');
+        const newExpansionInput = document.getElementById('new-expansion');
+        const newArticuloSelect = document.getElementById('new-articulo');
+        const newComentariosInput = document.getElementById('new-comentarios');
+        const newIdiomaSelect = document.getElementById('new-idioma');
+        const newCantidadInput = document.getElementById('new-cantidad');
+        const newCostoInput = document.getElementById('new-costo');
+        const newCostoNetoInput = document.getElementById('new-costo-neto');
+        const newVentaInput = document.getElementById('new-venta');
+        const newVentaArsInput = document.getElementById('new-venta-ars');
+        const newMargenGananciaInput = document.getElementById('new-margen-ganancia');
+        const newEstadoSelect = document.getElementById('new-estado');
+        const formMessage = document.getElementById('form-message');
+        const dolarBlueInput = document.getElementById('dolar-blue-input');
+        const expansionsDatalist = document.getElementById('expansions-datalist');
+
+        // Chart instances
+        let brandChart, collectionChart;
+
+        // --- ARTICLE MAPPINGS FOR NEW STOCK FORM ---
+        const articleMappings = {
+            'Pokémon TCG': ['Booster Box', 'Elite Trainer Box', 'Booster Bundle', 'Collection Box', 'Mini Tin', 'Blister Pack', 'Single Pack', 'Promo Pack', 'Deck Box'],
+            'Magic: The Gathering': ['Booster Box', 'Bundle', 'Commander Deck', 'Pre-release Pack', 'Single Pack', 'Gift Set', 'Fat Pack', 'Set Booster Box', 'Draft Booster Box', 'Collector Booster Box', 'Jumpstart Booster Box', 'Theme Booster'],
+            'One Piece Card Game': ['Booster Box', 'Starter Deck', 'Single Pack', 'Gift Set', 'Display Box', 'Tournament Pack'],
+            'Disney Lorcana': ['Booster Box', 'Starter Deck', 'Gift Set', 'Booster Pack', 'Illumineer\'s Trove', 'Playmat'],
+            'Accesorios': ['Sleeves', 'Toploaders', 'Binders/Portfolios', 'Playmat', 'Deck Box', 'Penny Sleeves', 'Storage Boxes', 'Dice', 'Counters', 'Booster Protectors']
+        };
+
+        // --- COLLECTION MAPPINGS (Broader Categories) ---
+        const collectionMappings = {
+            'Pokémon TCG': [
+                'Scarlet & Violet Series', 'Sword & Shield Series', 'Sun & Moon Series', 'XY Series',
+                'Black & White Series', 'Diamond & Pearl Series', 'EX Series', 'Base Set Era', 'Promotional Cards'
+            ].sort(),
+            'Magic: The Gathering': [
+                'Standard Sets', 'Modern Sets', 'Commander Products', 'Masters Sets', 'Supplemental Sets', 'Horizons Sets', 'Universes Beyond'
+            ].sort(),
+            'One Piece Card Game': [
+                'Main Sets', 'Starter Decks', 'Promotional Cards'
+            ].sort(),
+            'Disney Lorcana': [
+                'Chapter Sets', 'Gift Sets', 'Promotional Cards'
+            ].sort(),
+            'Accesorios': [
+                'General'
+            ].sort()
+        };
+
+        // --- EXPANSION MAPPINGS (Specific Expansions per Broad Collection) ---
+        const expansionMappings = {
+            'Scarlet & Violet Series': [
+                'Scarlet & Violet Base', 'Paldea Evolved', 'Obsidian Flames', '151', 'Paradox Rift',
+                'Paldean Fates', 'Temporal Forces', 'Twilight Masquerade', 'Prismatic Evolutions',
+                'Journey Together', 'Destined Rivals', 'Black Bolt', 'White Flare', 'Mega Evolution',
+                'Shrouded Fable', 'Night Wanderer', 'Crimson Haze'
+            ].sort(),
+            'Sword & Shield Series': [
+                'Sword & Shield Base', 'Rebel Clash', 'Darkness Ablaze', 'Vivid Voltage', 'Battle Styles', 'Chilling Reign',
+                'Evolving Skies', 'Fusion Strike', 'Brilliant Stars', 'Astral Radiance', 'Pokémon GO', 'Lost Origin',
+                'Silver Tempest', 'Crown Zenith', 'Shining Fates', 'Champion\'s Path'
+            ].sort(),
+            'Sun & Moon Series': [
+                'Sun & Moon Base', 'Guardians Rising', 'Burning Shadows', 'Crimson Invasion', 'Ultra Prism', 'Forbidden Light',
+                'Celestial Storm', 'Dragon Majesty', 'Lost Thunder', 'Team Up', 'Detective Pikachu', 'Unbroken Bonds',
+                'Unified Minds', 'Cosmic Eclipse'
+            ].sort(),
+            'XY Series': [
+                'XY Base', 'Flashfire', 'Furious Fists', 'Phantom Forces', 'Primal Clash', 'Roaring Skies',
+                'Ancient Origins', 'BREAKthrough', 'BREAKpoint', 'Generations', 'XY Evolutions'
+            ].sort(),
+            'Black & White Series': [
+                'Black & White Base', 'Emerging Powers', 'Noble Victories', 'Next Destinies', 'Dark Explorers',
+                'Dragons Exalted', 'Boundaries Crossed', 'Plasma Storm', 'Plasma Freeze', 'Plasma Blast',
+                'Legendary Treasures'
+            ].sort(),
+            'Diamond & Pearl Series': [
+                'Diamond & Pearl Base', 'Mysterious Treasures', 'Secret Wonders', 'Great Encounters', 'Majestic Dawn',
+                'Legends Awakened', 'Stormfront', 'Platinum', 'Rising Rivals', 'Supreme Victors', 'Arceus', 'HeartGold & SoulSilver'
+            ].sort(),
+            'EX Series': [
+                'EX Ruby & Sapphire', 'EX Sandstorm', 'EX Dragon', 'EX Team Magma vs Team Aqua', 'EX Hidden Legends',
+                'EX FireRed & LeafGreen', 'EX Deoxys', 'EX Emerald', 'EX Unseen Forces', 'EX Delta Species',
+                'EX Legend Maker', 'EX Holon Phantoms', 'EX Crystal Guardians', 'EX Dragon Frontiers', 'EX Power Keepers'
+            ].sort(),
+            'Base Set Era': [
+                'Base Set', 'Jungle', 'Fossil', 'Base Set 2', 'Team Rocket', 'Gym Heroes', 'Gym Challenge',
+                'Neo Genesis', 'Neo Discovery', 'Neo Revelation', 'Neo Destiny', 'Legendary Collection', 'Expedition Base Set',
+                'Aquapolis', 'Skyridge'
+            ].sort(),
+            'Promotional Cards': [
+                'Black Star Promos', 'POP Series', 'McDonald\'s Promos', 'Miscellaneous Promos'
+            ].sort(),
+            // Magic: The Gathering Expansions
+            'Standard Sets': [
+                'Bloomburrow', 'Duskmourn: House of Horror', 'Thunder Junction', 'Murders at Karlov Manor', 'The Lost Caverns of Ixalan',
+                'Wilds of Eldraine', 'March of the Machine', 'Phyrexia: All Will Be One', 'Dominaria United', 'Streets of New Capenna',
+                'Kamigawa: Neon Dynasty', 'Innistrad: Crimson Vow', 'Innistrad: Midnight Hunt', 'Forgotten Realms', 'Strixhaven: School of Mages',
+                'Kaldheim', 'Zendikar Rising', 'Ikoria: Lair of Behemoths', 'Theros Beyond Death', 'Eldraine', 'Core Set 2021', 'Core Set 2020'
+            ].sort(),
+            'Modern Sets': [
+                'Modern Horizons 3', 'Modern Horizons 2', 'Modern Horizons'
+            ].sort(),
+            'Commander Products': [
+                'Commander Legends: Battle for Baldur\'s Gate', 'Commander Masters', 'Commander (Various Years)'
+            ].sort(),
+            'Masters Sets': [
+                'Double Masters 2022', 'Double Masters', 'Ultimate Masters', 'Modern Masters (Various Years)'
+            ].sort(),
+            'Supplemental Sets': [
+                'Jumpstart 2022', 'Jumpstart', 'Secret Lair Drop Series (Various)'
+            ].sort(),
+            'Horizons Sets': [
+                'Modern Horizons 3', 'Modern Horizons 2', 'Modern Horizons'
+            ].sort(),
+            'Universes Beyond': [
+                'Fallout', 'Doctor Who', 'The Lord of the Rings: Tales of Middle-earth', 'Warhammer 40,000'
+            ].sort(),
+            // One Piece Card Game Expansions
+            'Main Sets': [
+                'OP-01 Romance Dawn', 'OP-02 Paramount War', 'OP-03 Pillars of Strength', 'OP-04 Kingdoms of Intrigue',
+                'OP-05 Awakening of the New Era', 'OP-06 Wings of the Captain', 'OP-07 500 Years in the Future',
+                'OP-08 Two Legends', 'OP-09 Four Emperors', 'OP-10 The New Age'
+            ].sort(),
+            'Starter Decks': [
+                'ST-01 Straw Hat Crew', 'ST-02 Worst Generation', 'ST-03 The Seven Warlords of the Sea',
+                'ST-04 Animal Kingdom Pirates', 'ST-05 Film Edition', 'ST-06 Absolute Justice',
+                'ST-07 Big Mom Pirates', 'ST-08 Side Monkey', 'ST-09 Yamato'
+            ].sort(),
+            // Disney Lorcana Expansions
+            'Chapter Sets': [
+                'The First Chapter', 'Rise of the Floodborn', 'Into the Inklands', 'Ursula\'s Return', 'Shimmering Skies'
+            ].sort(),
+            'Gift Sets': [
+                'Gift Set: Mickey & Minnie' // Example, add more if known
+            ].sort(),
+            // Accesorios Expansions (or sub-categories)
+            'General': [
+                'Standard Sleeves', 'Japanese Sleeves', 'Toploaders 3x4', 'Toploaders 5x7', '9-Pocket Binders',
+                '12-Pocket Binders', 'Standard Playmats', 'Custom Playmats', 'Simple Deck Boxes',
+                'Double Deck Boxes', 'Penny Sleeves', 'Storage Boxes', 'Dice', 'Counters',
+                'Booster Protectors', 'Others'
+            ].sort()
+        };
+        
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Inicializar Firebase services después de que el DOM esté completamente cargado
+            // Esto asegura que 'app' esté completamente inicializado antes de que 'auth' y 'db' lo usen.
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            const analytics = getAnalytics(app); // Inicializar analytics aquí
+
+            // Ahora que Firebase está inicializado, podemos configurar el listener de autenticación
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    isAuthReady = true;
+                    setupFirestoreListener(); // Empezar a escuchar Firestore después de la autenticación
+                } else {
+                    // Iniciar sesión anónimamente si no hay un usuario logueado
+                    try {
+                        // Para GitHub Pages, usamos signInAnonymously directamente para permitir el acceso.
+                        await signInAnonymously(auth);
+                    } catch (error) {
+                        console.error("Error signing in:", error);
+                        formMessage.textContent = 'Error de autenticación. Verifica tu configuración de Firebase y las reglas de seguridad.';
+                        formMessage.className = 'mt-4 text-center text-sm font-medium text-red-600';
+                        formMessage.classList.remove('hidden');
+                    }
+                }
+                populateFilters();
+                populateNewStockFormFilters();
+                addEventListeners();
+                renderAll(); // Renderizado inicial después de que se determina el estado de autenticación
+            });
+        });
+
+        // --- FIRESTORE LISTENER ---
+        function setupFirestoreListener() {
+            if (!userId || !db) {
+                console.error("User ID or Firestore DB is not available for Firestore listener.");
+                return;
+            }
+            // Para compartir la misma base de datos entre usuarios, almacenaremos los datos en una colección pública.
+            // Esto requiere reglas de seguridad en Firestore que permitan la lectura/escritura a todos los usuarios autenticados.
+            // Si quieres datos privados por usuario, la ruta sería: `artifacts/${appId}/users/${userId}/inventory`
+            // Puedes usar un appId fijo para tu proyecto si no estás en el entorno de Canvas.
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'mi-inventario-tcg-colaborativo'; 
+            const collectionPath = `artifacts/${appId}/public/data/sharedInventory`; // Ruta para datos compartidos
+            
+            onSnapshot(collection(db, collectionPath), (snapshot) => {
+                inventoryData = [];
+                snapshot.forEach((doc) => {
+                    inventoryData.push({ id: doc.id, ...doc.data() });
+                });
+                renderAll(); // Re-render everything when data changes
+            }, (error) => {
+                console.error("Error fetching inventory data:", error);
+                formMessage.textContent = 'Error al cargar el inventario. Verifica tu conexión y las reglas de seguridad de Firestore.';
+                formMessage.className = 'mt-4 text-center text-sm font-medium text-red-600';
+                formMessage.classList.remove('hidden');
+            });
+        }
+
+        // --- RENDER FUNCTIONS ---
+        function renderAll() {
+            const filters = getFilters();
+            let filteredData = applyFilters(filters);
+            
+            // Calculate costoNeto and margenGanancia for all items in inventoryData
+            inventoryData.forEach(item => {
+                item.costoNeto = item.costo * 1.20; // 20% additional cost
+                item.margenGanancia = item.venta - item.costoNeto;
+            });
+
+            // Apply sorting
+            filteredData.sort((a, b) => {
+                const aValue = a[currentSort.column] || '';
+                const bValue = b[currentSort.column] || '';
+                // Handle numeric sorting for specific columns
+                if (['cantidad', 'costo', 'costoNeto', 'venta', 'ventaArs', 'margenGanancia'].includes(currentSort.column)) {
+                    return currentSort.order === 'asc' ? aValue - bValue : bValue - aValue;
+                }
+                // Default to string comparison for others
+                return currentSort.order === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+            });
+
+            renderKPIs(filteredData);
+            renderTable(filteredData);
+            renderCharts(filteredData);
+        }
+
+        function renderKPIs(data) {
+            const totalStockValueCostNeto = data.reduce((sum, item) => sum + (item.cantidad * item.costoNeto), 0); // Use costoNeto
+            const totalStockValueSale = data.reduce((sum, item) => sum + (item.cantidad * item.venta), 0);
+            const potentialProfit = totalStockValueSale - totalStockValueCostNeto; // Use costoNeto
+            const totalItems = data.reduce((sum, item) => sum + item.cantidad, 0);
+
+            const kpis = [
+                { title: 'Valor Total de Stock (Costo Neto)', value: `$${totalStockValueCostNeto.toFixed(2)}`, icon: '💰' },
+                { title: 'Valor Total de Venta', value: `$${totalStockValueSale.toFixed(2)}`, icon: '📈' },
+                { title: 'Ganancia Bruta Potencial', value: `$${potentialProfit.toFixed(2)}`, icon: '💸' },
+                { title: 'Total de Artículos en Stock', value: totalItems.toLocaleString(), icon: '📦' }
+            ];
+
+            kpiSection.innerHTML = kpis.map(kpi => `
+                <div class="kpi-card p-6 flex items-center">
+                    <div class="text-4xl mr-4">${kpi.icon}</div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">${kpi.title}</p>
+                        <p class="text-2xl font-bold text-gray-900">${kpi.value}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderTable(data) {
+            if (data.length === 0) {
+                tableBody.innerHTML = '';
+                noResultsDiv.classList.remove('hidden');
+                return;
+            }
+            noResultsDiv.classList.add('hidden');
+
+            const dolarBlueValue = parseFloat(dolarBlueInput.value) || 1; 
+
+            tableBody.innerHTML = data.map(item => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.marca}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${item.coleccion}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${item.expansion}</td> <!-- Display Expansion -->
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${item.articulo}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${item.comentarios}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+                        <div class="quantity-control">
+                            <button class="quantity-button" onclick="updateQuantity('${item.id}', -1)">-</button>
+                            <span class="quantity-display ${item.cantidad < 5 && item.cantidad > 0 ? 'text-orange-600' : (item.cantidad === 0 ? 'text-red-600' : 'text-gray-900')}">${item.cantidad}</span>
+                            <button class="quantity-button" onclick="updateQuantity('${item.id}', 1)">+</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">$${item.costo.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">$${item.costoNeto.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">$${item.venta.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">ARS$${(item.venta * dolarBlueValue).toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-700">$${item.margenGanancia.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button onclick="deleteItem('${item.id}')" class="text-red-600 hover:text-red-900">Eliminar</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderCharts(data) {
+            renderBrandChart(data);
+            renderCollectionChart(data);
+        }
+
+        // --- CHART RENDERING ---
+        function renderBrandChart(data) {
+            const brandData = data.reduce((acc, item) => {
+                const value = item.cantidad * item.costoNeto;
+                acc[item.marca] = (acc[item.marca] || 0) + value;
+                return acc;
+            }, {});
+
+            const ctx = document.getElementById('brandChart').getContext('2d');
+            if (brandChart) brandChart.destroy();
+            
+            brandChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(brandData),
+                    datasets: [{
+                        label: 'Valor de Stock',
+                        data: Object.values(brandData),
+                        backgroundColor: ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#8b5cf6', '#ec4899', '#a855f7', '#6d28d9', '#db2777'],
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed !== null) {
+                                        label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderCollectionChart(data) {
+            // Filter only TCG brands for this chart
+            const tcgBrands = ['Pokémon TCG', 'Magic: The Gathering', 'One Piece Card Game', 'Disney Lorcana'];
+            const collectionData = data
+                .filter(item => tcgBrands.includes(item.marca))
+                .reduce((acc, item) => {
+                    const value = item.cantidad * item.costoNeto;
+                    // Combine collection and expansion for unique labels if needed
+                    const label = `${item.coleccion} - ${item.expansion} (${item.marca})`;
+                    acc[label] = (acc[label] || 0) + value;
+                    return acc;
+                }, {});
+
+            const sortedCollections = Object.entries(collectionData)
+                .sort(([,a],[,b]) => b-a)
+                .slice(0, 5);
+
+            const ctx = document.getElementById('collectionChart').getContext('2d');
+            if (collectionChart) collectionChart.destroy();
+
+            collectionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedCollections.map(c => c[0]),
+                    datasets: [{
+                        label: 'Valor de Stock (USD)',
+                        data: sortedCollections.map(c => c[1]),
+                        backgroundColor: '#60a5fa',
+                        borderColor: '#2563eb',
+                        borderWidth: 1,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.raw);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- FILTER & EVENT LOGIC ---
+        function populateFilters() {
+            const brands = ['Todos', ...new Set(inventoryData.map(item => item.marca))].sort();
+            const collections = ['Todos', ...new Set(inventoryData.map(item => item.coleccion))].sort();
+            const expansions = ['Todos', ...new Set(inventoryData.map(item => item.expansion))].sort(); // New filter for expansions
+            const articles = ['Todos', ...new Set(inventoryData.map(item => item.articulo))].sort(); 
+
+            brandFilter.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
+            collectionFilter.innerHTML = collections.map(c => `<option value="${c}">${c}</option>`).join('');
+            expansionFilter.innerHTML = expansions.map(e => `<option value="${e}">${e}</option>`).join(''); // Populate expansion filter
+            itemFilter.innerHTML = articles.map(a => `<option value="${a}">${a}</option>`).join(''); 
+        }
+
+        function getFilters() {
+            return {
+                brand: brandFilter.value,
+                collection: collectionFilter.value,
+                expansion: expansionFilter.value, // Get expansion filter value
+                item: itemFilter.value, 
+                search: searchInput.value.toLowerCase()
+            };
+        }
+
+        function applyFilters(filters) {
+            return inventoryData.filter(d => 
+                (filters.brand === 'Todos' || d.marca === filters.brand) &&
+                (filters.collection === 'Todos' || d.coleccion === filters.collection) &&
+                (filters.expansion === 'Todos' || d.expansion === filters.expansion) && // Apply expansion filter
+                (d.articulo === 'Todos' || d.articulo === filters.item) && // Corrected filter for item
+                (d.comentarios.toLowerCase().includes(filters.search))
+            );
+        }
+        
+        function addEventListeners() {
+            brandFilter.addEventListener('change', renderAll);
+            collectionFilter.addEventListener('change', renderAll);
+            expansionFilter.addEventListener('change', renderAll); // Add event listener for expansion filter
+            itemFilter.addEventListener('change', renderAll);
+            searchInput.addEventListener('input', renderAll);
+            addStockForm.addEventListener('submit', handleAddStock);
+            dolarBlueInput.addEventListener('input', renderAll); 
+            
+            // Event listeners for dynamic options in new stock form
+            newMarcaSelect.addEventListener('change', updateNewArticleOptions);
+            newMarcaSelect.addEventListener('change', updateNewCollectionAndExpansionOptions); // Combined for better flow
+            newColeccionSelect.addEventListener('change', updateNewExpansionOptions); // New listener for collection to update expansion
+            newCostoInput.addEventListener('input', updateCalculatedFields); 
+            newVentaInput.addEventListener('input', updateCalculatedFields); 
+
+            // Event listeners para ordenación de tabla
+            document.querySelectorAll('th[data-sort]').forEach(th => {
+                th.addEventListener('click', () => {
+                    const column = th.dataset.sort;
+                    if (currentSort.column === column) {
+                        currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSort.column = column;
+                        currentSort.order = 'asc';
+                    }
+                    renderAll();
+                });
+            });
+        }
+
+        // --- NEW STOCK FORM LOGIC ---
+        function populateNewStockFormFilters() {
+            const brands = Object.keys(articleMappings).sort();
+            const estados = ['Disponible', 'Pocas Unidades', 'Agotado', 'Próximamente'];
+            const idiomas = ['Inglés', 'Español', 'Japonés', 'N/A'];
+
+            newMarcaSelect.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
+            newEstadoSelect.innerHTML = estados.map(e => `<option value="${e}">${e}</option>`).join('');
+            newIdiomaSelect.innerHTML = idiomas.map(i => `<option value="${i}">${i}</option>`).join('');
+            
+            // Populate article and collection/expansion options based on the initially selected brand
+            updateNewArticleOptions();
+            updateNewCollectionAndExpansionOptions(); // Initial population
+            updateCalculatedFields(); 
+        }
+
+        function updateNewArticleOptions() {
+            const selectedBrand = newMarcaSelect.value;
+            const articlesForBrand = articleMappings[selectedBrand] || [];
+            newArticuloSelect.innerHTML = articlesForBrand.map(a => `<option value="${a}">${a}</option>`).join('');
+        }
+
+        function updateNewCollectionAndExpansionOptions() {
+            const selectedBrand = newMarcaSelect.value;
+            const collectionsForBrand = collectionMappings[selectedBrand] || [];
+            newColeccionSelect.innerHTML = collectionsForBrand.map(c => `<option value="${c}">${c}</option>`).join('');
+            
+            // Also update expansions when brand or collection changes
+            updateNewExpansionOptions();
+        }
+
+        function updateNewExpansionOptions() {
+            const selectedCollection = newColeccionSelect.value;
+            const expansionsForCollection = expansionMappings[selectedCollection] || [];
+            expansionsDatalist.innerHTML = expansionsForCollection.map(e => `<option value="${e}">`).join('');
+            // Clear the input field when the collection changes to avoid stale data
+            newExpansionInput.value = '';
+        }
+
+
+        function updateCalculatedFields() {
+            const costoUnitario = parseFloat(newCostoInput.value);
+            const precioVenta = parseFloat(newVentaInput.value);
+            const dolarBlueValue = parseFloat(dolarBlueInput.value) || 1;
+
+            // Calculate Costo Neto
+            if (!isNaN(costoUnitario)) {
+                newCostoNetoInput.value = (costoUnitario * 1.20).toFixed(2);
+            } else {
+                newCostoNetoInput.value = '';
+            }
+
+            // Calculate Precio Venta (ARS)
+            if (!isNaN(precioVenta)) {
+                newVentaArsInput.value = (precioVenta * dolarBlueValue).toFixed(2);
+            } else {
+                newVentaArsInput.value = '';
+            }
+
+            // Calculate Margen de Ganancia
+            const costoNeto = parseFloat(newCostoNetoInput.value);
+            if (!isNaN(precioVenta) && !isNaN(costoNeto)) {
+                newMargenGananciaInput.value = (precioVenta - costoNeto).toFixed(2);
+            } else {
+                newMargenGananciaInput.value = '';
+            }
+        }
+
+        async function handleAddStock(event) {
+            event.preventDefault(); 
+
+            if (!isAuthReady || !userId || !db) {
+                formMessage.textContent = 'Autenticación o base de datos no listas. Por favor, espere o recargue la página. Asegúrate de que Firebase esté configurado.';
+                formMessage.className = 'mt-4 text-center text-sm font-medium text-red-600';
+                formMessage.classList.remove('hidden');
+                return;
+            }
+
+            const newEntry = {
+                marca: newMarcaSelect.value,
+                coleccion: newColeccionSelect.value, 
+                expansion: newExpansionInput.value,
+                articulo: newArticuloSelect.value,
+                comentarios: newComentariosInput.value, 
+                idioma: newIdiomaSelect.value,
+                cantidad: parseInt(newCantidadInput.value),
+                costo: parseFloat(newCostoInput.value),
+                costoNeto: parseFloat(newCostoNetoInput.value), 
+                venta: parseFloat(newVentaInput.value),
+                margenGanancia: parseFloat(newMargenGananciaInput.value), 
+                estado: newEstadoSelect.value
+            };
+
+            // Validation
+            if (!newEntry.marca || !newEntry.coleccion || !newEntry.expansion || !newEntry.articulo || 
+                isNaN(newEntry.cantidad) || isNaN(newEntry.costo) || isNaN(newEntry.venta) || !newEntry.estado || !newEntry.idioma ||
+                isNaN(newEntry.costoNeto) || isNaN(newEntry.margenGanancia)) {
+                formMessage.textContent = 'Por favor, complete todos los campos obligatorios y asegúrese de que los valores numéricos sean válidos.';
+                formMessage.className = 'mt-4 text-center text-sm font-medium text-red-600';
+                formMessage.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'mi-inventario-tcg-colaborativo';
+                const collectionRef = collection(db, `artifacts/${appId}/public/data/sharedInventory`); // Usar colección compartida
+                await addDoc(collectionRef, newEntry);
+                formMessage.textContent = `Stock agregado exitosamente.`;
+                formMessage.className = 'mt-4 text-center text-sm font-medium text-green-600';
+                formMessage.classList.remove('hidden');
+                renderAll(); // Llama a renderAll para actualizar la UI inmediatamente
+            }
+            catch (error) {
+                console.error("Error adding document: ", error);
+                formMessage.textContent = 'Error al agregar el stock. Intente de nuevo.';
+                formMessage.className = 'mt-4 text-center text-sm font-medium text-red-600';
+                formMessage.classList.remove('hidden');
+            }
+
+            addStockForm.reset();
+            populateNewStockFormFilters(); 
+            setTimeout(() => {
+                formMessage.classList.add('hidden');
+            }, 5000);
+        }
+
+        // --- UPDATE QUANTITY FUNCTION ---
+        async function updateQuantity(itemId, changeAmount) {
+            if (!isAuthReady || !userId || !db) {
+                console.error("User ID or Firestore DB is not available for quantity update.");
+                return;
+            }
+
+            const itemToUpdate = inventoryData.find(item => item.id === itemId);
+            if (!itemToUpdate) {
+                console.error("Item not found for update:", itemId);
+                return;
+            }
+
+            const newQuantity = Math.max(0, itemToUpdate.cantidad + changeAmount); // Ensure quantity doesn't go below 0
+
+            try {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'mi-inventario-tcg-colaborativo';
+                const itemRef = doc(db, `artifacts/${appId}/public/data/sharedInventory`, itemId); // Usar colección compartida
+                await updateDoc(itemRef, { cantidad: newQuantity });
+                console.log(`Quantity for item ${itemId} updated to ${newQuantity}`);
+                // The onSnapshot listener will re-render the table automatically
+            } catch (error) {
+                console.error("Error updating quantity:", error);
+            }
+        }
+
+        // --- DELETE ITEM FUNCTION ---
+        async function deleteItem(idToDelete) {
+            if (!isAuthReady || !userId || !db) {
+                console.error("User ID or Firestore DB is not available for deletion.");
+                return;
+            }
+            try {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'mi-inventario-tcg-colaborativo';
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/sharedInventory`, idToDelete)); // Usar colección compartida
+                console.log("Document successfully deleted!");
+                // renderAll() will be called by onSnapshot listener
+            } catch (error) {
+                console.error("Error removing document: ", error);
+            }
+        }
+
+        // Expose functions to global scope for onclick
+        window.deleteItem = deleteItem;
+        window.updateQuantity = updateQuantity;
+
+    </script>
+</body>
+</html>
