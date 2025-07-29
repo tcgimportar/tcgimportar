@@ -1,0 +1,2182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control de Inventario TCG</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Placeholder Comments -->
+    <!-- Chosen Palette: Warm Neutrals with Subtle Blue Accents -->
+    <!-- Application Structure Plan: A single-page dashboard layout. Top section for KPIs (total value, item count). Main area with a filter panel (by brand, collection, type) and a dynamic, sortable inventory table. A bottom section with charts (pie chart for brand distribution, bar chart for value by collection). This structure provides an immediate overview, allows for detailed exploration via filtering/sorting, and offers visual synthesis through charts, which is more intuitive than a raw spreadsheet. -->
+    <!-- Visualization & Content Choices: Data from the report is stored in a JS array. KPIs (Inform): HTML cards updated by JS. Inventory Table (Organize/Compare): Dynamic HTML table with JS sorting/filtering. Distribution Chart (Compare): Chart.js Pie Chart showing stock value by brand. Value Chart (Compare): Chart.js Bar Chart showing stock value by top collections. All interactions are handled by vanilla JS to update the views. This meets the goal of making data explorable and understandable. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa; /* Light neutral background color */
+            color: #1a202c; /* Default dark text color */
+            transition: background-color 0.3s, color 0.3s;
+        }
+        body.dark {
+            background-color: #1a202c; /* Dark background color */
+            color: #e2e8f0; /* Light text color */
+        }
+        .kpi-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: transform 0.2s, box-shadow 0.2s, background-color 0.3s;
+        }
+        body.dark .kpi-card {
+            background-color: #2d3748;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 350px;
+            max-height: 400px;
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: background-color 0.3s;
+        }
+        body.dark .chart-container {
+            background-color: #2d3748;
+        }
+        /* Style for fixed table header */
+        .table-header-sticky {
+            position: sticky;
+            top: 0;
+            background-color: #f1f5f9;
+            z-index: 10;
+            transition: background-color 0.3s;
+        }
+        body.dark .table-header-sticky {
+            background-color: #4a5568;
+        }
+        /* Style for sort icon */
+        .sort-icon {
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        .sort-icon.active {
+            opacity: 1;
+        }
+        .sort-icon:hover {
+            opacity: 1;
+        }
+        .form-section {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            margin-top: 2rem;
+            transition: background-color 0.3s;
+        }
+        body.dark .form-section {
+            background-color: #2d3748;
+        }
+        .quantity-control {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .quantity-button {
+            background-color: #e2e8f0;
+            color: #4a5568;
+            border: none;
+            border-radius: 0.375rem;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s, color 0.3s;
+        }
+        .quantity-button:hover {
+            background-color: #cbd5e0;
+        }
+        body.dark .quantity-button {
+            background-color: #616e7f;
+            color: #e2e8f0;
+        }
+        body.dark .quantity-button:hover {
+            background-color: #718096;
+        }
+        .quantity-display {
+            min-width: 2rem;
+            text-align: center;
+        }
+
+        /* Styles for confirmation modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            transition: background-color 0.3s;
+        }
+        body.dark .modal-content {
+            background-color: #2d3748;
+        }
+        /* Ensure modal text is white in dark mode */
+        body.dark .modal-content p {
+            color: #e2e8f0; /* Light text for dark mode */
+        }
+        .modal-buttons {
+            margin-top: 1.5rem;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+        .modal-button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s, color 0.3s;
+        }
+        .modal-button.confirm {
+            background-color: #ef4444;
+            color: white;
+            border: 1px solid #ef4444;
+        }
+        .modal-button.confirm:hover {
+            background-color: #dc2626;
+            border-color: #dc2626;
+        }
+        .modal-button.cancel {
+            background-color: #e2e8f0;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+        .modal-button.cancel:hover {
+            background-color: #cbd5e0;
+            border-color: #cbd5e0;
+        }
+        body.dark .modal-button.cancel {
+            background-color: #616e7f;
+            color: #e2e8f0;
+            border-color: #616e7f;
+        }
+        body.dark .modal-button.cancel:hover {
+            background-color: #718096;
+            border-color: #718096;
+        }
+
+        /* Styles for loading indicator */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001; /* Higher than modal */
+        }
+        body.dark .loading-overlay {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Style for low stock */
+        .low-stock {
+            background-color: #fffbeb; /* Light yellow */
+        }
+        body.dark .low-stock {
+            background-color: #5a4b00; /* Dark yellow */
+        }
+        .zero-stock {
+            background-color: #fee2e2; /* Light red */
+        }
+        body.dark .zero-stock {
+            background-color: #6b0000; /* Dark red */
+        }
+
+        /* Styles for form error messages */
+        .error-message {
+            color: #ef4444;
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+
+        /* Styles for inputs and selects */
+        .form-input {
+            background-color: white;
+            color: #1a202c;
+            border-color: #cbd5e0;
+        }
+        body.dark .form-input {
+            background-color: #4a5568; /* Darker background for inputs */
+            color: #e2e8f0; /* Light text for inputs */
+            border-color: #616e7f; /* Lighter border for inputs */
+        }
+        body.dark select.form-input {
+            /* Custom arrow for dark mode selects to be visible */
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23e2e8f0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 0.8rem 0.8rem;
+            /* Ensure text color is light for options in dark mode */
+            color: #e2e8f0;
+            -webkit-appearance: none; /* Remove default arrow on WebKit browsers */
+            -moz-appearance: none;    /* Remove default arrow on Firefox */
+            appearance: none;         /* Remove default arrow */
+        }
+        body.dark option {
+            background-color: #2d3748; /* Dark background for options in dark mode */
+            color: #e2e8f0; /* Light text color for options in dark mode */
+        }
+        
+        /* Text colors for dark mode */
+        body.dark .text-gray-700 {
+            color: #cbd5e0;
+        }
+        body.dark .text-gray-900 {
+            color: #e2e8f0;
+        }
+        body.dark .text-gray-600 {
+            color: #a0aec0;
+        }
+        body.dark .text-gray-500 {
+            color: #a0aec0;
+        }
+        body.dark .divide-gray-200 {
+            border-color: #4a5568;
+        }
+        body.dark .divide-gray-200 > tr > td, body.dark .divide-gray-200 > tr > th {
+            border-color: #4a5568;
+        }
+        body.dark .bg-white {
+            background-color: #2d3748;
+        }
+        body.dark .bg-gray-100 {
+            background-color: #4a5568;
+        }
+        body.dark .border-gray-300 {
+            border-color: #616e7f;
+        }
+        body.dark .shadow-lg {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+        }
+        body.dark .hover\:bg-gray-50:hover {
+            background-color: #4a5568;
+        }
+        body.dark .text-green-700 {
+            color: #4ade80; /* Brighter green for dark mode */
+        }
+        body.dark .text-red-600 {
+            color: #f87171; /* Brighter red for dark mode */
+        }
+        body.dark .hover\:text-red-900:hover {
+            color: #ef4444; /* Darker red on hover for dark mode */
+        }
+
+        /* Toast message styles */
+        #toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            pointer-events: none; /* Allow clicks to pass through */
+        }
+        .toast-message {
+            background-color: #333;
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: fadeInOut 5s forwards;
+            min-width: 200px;
+            text-align: center;
+        }
+        .toast-message.success { background-color: #10b981; } /* Green */
+        .toast-message.error { background-color: #ef4444; } /* Red */
+        .toast-message.warning { background-color: #f59e0b; } /* Orange */
+        .toast-message.info { background-color: #3b82f6; } /* Blue */
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Confirmation Modal (hidden by default) -->
+    <div id="confirmation-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <p id="modal-message" class="text-lg font-semibold text-gray-800">¿Estás seguro de que quieres realizar esta acción?</p>
+            <div class="modal-buttons">
+                <button id="confirm-button" class="modal-button confirm">Confirmar</button>
+                <button id="cancel-button" class="modal-button cancel">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Item Modal (hidden by default) -->
+    <div id="edit-item-modal" class="modal-overlay hidden">
+        <div class="modal-content max-w-lg">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Editar Ítem de Inventario</h3>
+            <form id="edit-item-form" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                <input type="hidden" id="edit-item-id">
+                <div>
+                    <label for="edit-marca" class="block text-sm font-medium text-gray-700">Marca</label>
+                    <input type="text" id="edit-marca" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 rounded-md form-input" readonly>
+                </div>
+                <div>
+                    <label for="edit-coleccion" class="block text-sm font-medium text-gray-700">Colección</label>
+                    <input type="text" id="edit-coleccion" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 rounded-md form-input" readonly>
+                </div>
+                <div>
+                    <label for="edit-expansion" class="block text-sm font-medium text-gray-700">Expansión</label>
+                    <input type="text" id="edit-expansion" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 rounded-md form-input" readonly>
+                </div>
+                <div>
+                    <label for="edit-articulo" class="block text-sm font-medium text-gray-700">Artículo</label>
+                    <input type="text" id="edit-articulo" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 rounded-md form-input" readonly>
+                </div>
+                <div class="md:col-span-2">
+                    <label for="edit-comentarios" class="block text-sm font-medium text-gray-700">Comentarios</label>
+                    <input type="text" id="edit-comentarios" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 rounded-md form-input">
+                </div>
+                <div>
+                    <label for="edit-idioma" class="block text-sm font-medium text-gray-700">Idioma</label>
+                    <select id="edit-idioma" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md form-input">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="edit-cantidad" class="block text-sm font-medium text-gray-700">Cantidad en Stock</label>
+                    <input type="number" id="edit-cantidad" min="0" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 rounded-md form-input">
+                </div>
+                <div>
+                    <label for="edit-costo" class="block text-sm font-medium text-gray-700">Costo Unitario (USD)</label>
+                    <input type="number" id="edit-costo" step="0.01" min="0" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 rounded-md form-input" oninput="updateEditCalculatedFields()">
+                </div>
+                <div>
+                    <label for="edit-shipping-commission" class="block text-sm font-medium text-gray-700">Comisión Envío (%)</label>
+                    <input type="number" id="edit-shipping-commission" min="0" max="100" step="0.01" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 rounded-md form-input" oninput="updateEditCalculatedFields()">
+                </div>
+                <div>
+                    <label for="edit-venta" class="block text-sm font-medium text-gray-700">Precio Venta (USD)</label>
+                    <input type="number" id="edit-venta" step="0.01" min="0" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 rounded-md form-input" oninput="updateEditCalculatedFields()">
+                </div>
+                <div>
+                    <label for="edit-margen-ganancia" class="block text-sm font-medium text-gray-700">Margen de Ganancia (USD)</label>
+                    <input type="number" id="edit-margen-ganancia" step="0.01" min="0" class="mt-1 block w-full pl-3 py-2 text-base bg-gray-100 border-gray-300 rounded-md form-input" readonly>
+                </div>
+                <div>
+                    <label for="edit-estado" class="block text-sm font-medium text-gray-700">Estado</label>
+                    <select id="edit-estado" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md form-input">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label for="edit-image-url" class="block text-sm font-medium text-gray-700">URL de Imagen (Opcional)</label>
+                    <input type="url" id="edit-image-url" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 rounded-md form-input">
+                </div>
+                <div class="md:col-span-2 flex justify-end gap-4 mt-4">
+                    <button type="button" onclick="hideEditItemModal()" class="modal-button cancel">Cancelar</button>
+                    <button type="submit" class="modal-button confirm bg-blue-600 hover:bg-blue-700">Guardar Cambios</button>
+                </div>
+            </form>
+            <div id="edit-form-message" class="mt-4 text-center text-sm font-medium hidden"></div>
+        </div>
+    </div>
+
+
+    <!-- Loading Indicator (hidden by default) -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <!-- Header -->
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-start relative">
+            <div class="flex flex-col md:flex-row items-center mb-4 md:mb-0 w-full md:w-auto">
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mr-4 mb-2 md:mb-0">Panel de Control de Inventario TCG</h1>
+            </div>
+            
+            <div class="flex flex-col md:flex-row items-end md:items-center space-y-4 md:space-y-0 md:space-x-6 mt-4 md:mt-0">
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm text-gray-700 flex items-center">
+                        Dólar Blue: 
+                        <input type="number" id="dolar-blue-input" value="1000" step="0.01" class="ml-2 w-24 px-2 py-1 border border-gray-300 rounded-md text-center bg-white form-input" oninput="renderAll()"> ARS
+                    </div>
+                </div>
+                <!-- Dark Mode Toggle - Positioned for better layout -->
+                <button id="theme-toggle" class="p-2 rounded-full bg-gray-200 text-gray-800 shadow-md transition-colors duration-300">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8 0 1010.586 10.586z"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- KPIs Section (Key Performance Indicators) -->
+        <section id="kpi-section" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- KPI cards will be generated here by JS -->
+        </section>
+
+        <!-- Filters and Table Section -->
+        <main class="bg-white p-6 rounded-xl shadow-lg">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Inventario/Stock Disponible</h2>
+            <!-- Filter Controls -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 items-end">
+                <div>
+                    <label for="brand-filter" class="block text-sm font-medium text-gray-700">Filtrar por Marca</label>
+                    <select id="brand-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                        <!-- Options generated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="collection-filter" class="block text-sm font-medium text-gray-700">Filtrar por Colección</label>
+                    <select id="collection-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                        <!-- Options generated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="expansion-filter" class="block text-sm font-medium text-gray-700">Filtrar por Expansión</label>
+                    <select id="expansion-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                        <!-- Options generated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="item-filter" class="block text-sm font-medium text-gray-700">Filtrar por Artículo</label>
+                    <select id="item-filter" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                        <!-- Options generated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="search-input" class="block text-sm font-medium text-gray-700">Buscar por Comentarios</label>
+                    <input type="text" id="search-input" placeholder="Ej: Shiny Mewtwo..." class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                </div>
+            </div>
+            
+            <!-- Export Button -->
+            <div class="flex justify-end mb-4">
+                <button id="export-csv-button" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-300">
+                    Exportar a CSV
+                </button>
+            </div>
+
+            <!-- Inventory Table Container -->
+            <div class="overflow-x-auto max-h-[60vh] relative">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="table-header-sticky">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Imagen</th> <!-- New column for Image -->
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="marca">Marca</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="coleccion">Colección</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="expansion">Expansión</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="articulo">Artículo</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Comentarios</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="cantidad">Stock</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="costo">Costo (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="venta">Venta (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="ventaArs">Venta (ARS)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="margenGanancia">Margen de Ganancia (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Rows generated by JS -->
+                    </tbody>
+                </table>
+                 <div id="no-results" class="text-center py-10 text-gray-500 hidden">
+                    No se encontraron resultados para los filtros aplicados.
+                </div>
+            </div>
+
+        </main>
+        
+        <!-- Section for Adding Stock -->
+        <section class="form-section">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Agregar Nuevo Stock</h2>
+            <form id="add-stock-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                    <label for="new-marca" class="block text-sm font-medium text-gray-700">Marca</label>
+                    <select id="new-marca" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                        <!-- Options generated by JS -->
+                    </select>
+                    <p id="error-new-marca" class="error-message hidden">La marca es obligatoria.</p>
+                </div>
+                <div>
+                    <label for="new-coleccion" class="block text-sm font-medium text-gray-700">Colección</label>
+                    <select id="new-coleccion" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                        <!-- Options generated by JS -->
+                    </select>
+                    <p id="error-new-coleccion" class="error-message hidden">La colección es obligatoria.</p>
+                </div>
+                <div>
+                    <label for="new-expansion" class="block text-sm font-medium text-gray-700">Expansión</label>
+                    <input type="text" id="new-expansion" list="expansions-datalist" placeholder="Ej: Paldean Fates" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                    <datalist id="expansions-datalist">
+                        <!-- Options populated by JS -->
+                    </datalist>
+                    <p id="error-new-expansion" class="error-message hidden">La expansión es obligatoria.</p>
+                </div>
+                <div>
+                    <label for="new-articulo" class="block text-sm font-medium text-gray-700">Artículo</label>
+                    <select id="new-articulo" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                        <!-- Options generated by JS -->
+                    </select>
+                    <p id="error-new-articulo" class="error-message hidden">El artículo es obligatorio.</p>
+                </div>
+                <div>
+                    <label for="new-comentarios" class="block text-sm font-medium text-gray-700">Comentarios</label>
+                    <input type="text" id="new-comentarios" placeholder="Ej: Shiny Mewtwo" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                </div>
+                <div>
+                    <label for="new-idioma" class="block text-sm font-medium text-gray-700">Idioma</label>
+                    <select id="new-idioma" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                        <!-- Options generated by JS -->
+                    </select>
+                    <p id="error-new-idioma" class="error-message hidden">El idioma es obligatorio.</p>
+                </div>
+                <div>
+                    <label for="new-cantidad" class="block text-sm font-medium text-gray-700">Cantidad en Stock</label>
+                    <input type="number" id="new-cantidad" min="0" placeholder="Ej: 10" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                    <p id="error-new-cantidad" class="error-message hidden">La cantidad debe ser un número válido.</p>
+                </div>
+                <div>
+                    <label for="new-costo" class="block text-sm font-medium text-gray-700">Costo Unitario (USD)</label>
+                    <input type="number" id="new-costo" step="0.01" min="0" placeholder="Ej: 45.50" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                    <p id="error-new-costo" class="error-message hidden">El costo unitario debe ser un número válido.</p>
+                </div>
+                <div>
+                    <label for="new-shipping-commission" class="block text-sm font-medium text-gray-700">Comisión Envío (%)</label>
+                    <input type="number" id="new-shipping-commission" value="20" min="0" max="100" step="0.01" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" oninput="updateCalculatedFields()">
+                    <p id="error-new-shipping-commission" class="error-message hidden">La comisión de envío debe ser un porcentaje válido.</p>
+                </div>
+                <div>
+                    <label for="new-venta" class="block text-sm font-medium text-gray-700">Precio Venta (USD)</label>
+                    <input type="number" id="new-venta" step="0.01" min="0" placeholder="Ej: 65.00" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                    <p id="error-new-venta" class="error-message hidden">El precio de venta debe ser un número válido.</p>
+                </div>
+                <div>
+                    <label for="new-venta-ars" class="block text-sm font-medium text-gray-700">Precio Venta (ARS)</label>
+                    <input type="number" id="new-venta-ars" step="0.01" min="0" class="mt-1 block w-full pl-3 py-2 text-base bg-gray-100 border-gray-300 rounded-md form-input" readonly>
+                </div>
+                <div>
+                    <label for="new-margen-ganancia" class="block text-sm font-medium text-gray-700">Margen de Ganancia (USD)</label>
+                    <input type="number" id="new-margen-ganancia" step="0.01" min="0" class="mt-1 block w-full pl-3 py-2 text-base bg-gray-100 border-gray-300 rounded-md form-input" readonly>
+                </div>
+                <div>
+                    <label for="new-estado" class="block text-sm font-medium text-gray-700">Estado</label>
+                    <select id="new-estado" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                        <!-- Options generated by JS -->
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">El Costo Neto está calculado como el Costo Unitario más la comisión de envío.</p>
+                    <p id="error-new-estado" class="error-message hidden">El estado es obligatorio.</p>
+                </div>
+                <div>
+                    <label for="new-image-url" class="block text-sm font-medium text-gray-700">URL de Imagen (Opcional)</label>
+                    <input type="url" id="new-image-url" placeholder="Ej: https://ejemplo.com/imagen.jpg" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                    <p class="text-xs text-gray-500 mt-1">Para evitar conflictos de carga, se recomienda usar URLs de sitios web públicos y estables (ej. Walmart, Target, Amazon, TCGPlayer, CardMarket).</p>
+                </div>
+                <div class="lg:col-span-3 flex justify-end mt-4">
+                    <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-300">
+                        Agregar Stock
+                    </button>
+                </div>
+            </form>
+            <div id="form-message" class="mt-4 text-center text-sm font-medium hidden"></div>
+        </section>
+
+        <!-- Section for Registering Sales -->
+        <section class="form-section">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Registrar Venta</h2>
+            <form id="add-sale-form" class="grid grid-cols-1 md:grid-cols-2 lg:col-span-3 gap-4">
+                <div>
+                    <label for="sale-item-select" class="block text-sm font-medium text-gray-700">Artículo Vendido</label>
+                    <select id="sale-item-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                        <option value="">Selecciona un artículo</option>
+                        <!-- Options generated by JS -->
+                    </select>
+                    <p id="error-sale-item-select" class="error-message hidden">Selecciona un artículo.</p>
+                </div>
+                <div>
+                    <label for="sale-quantity-input" class="block text-sm font-medium text-gray-700">Cantidad Vendida</label>
+                    <input type="number" id="sale-quantity-input" min="1" placeholder="Ej: 1" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                    <p id="error-sale-quantity-input" class="error-message hidden">Cantidad vendida inválida.</p>
+                </div>
+                <div>
+                    <label for="sale-price-per-unit-input" class="block text-sm font-medium text-gray-700">Precio de Venta por Unidad (USD)</label>
+                    <input type="number" id="sale-price-per-unit-input" step="0.01" min="0" placeholder="Auto-relleno" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                    <p id="error-sale-price-per-unit-input" class="error-message hidden">Precio de venta inválido.</p>
+                </div>
+                <div>
+                    <label for="sale-date-input" class="block text-sm font-medium text-gray-700">Fecha de Venta</label>
+                    <input type="date" id="sale-date-input" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input" required>
+                    <p id="error-sale-date-input" class="error-message hidden">La fecha es obligatoria.</p>
+                </div>
+                <div>
+                    <label for="sale-comments-input" class="block text-sm font-medium text-gray-700">Comentarios de la Venta</label>
+                    <input type="text" id="sale-comments-input" placeholder="Ej: Cliente Juan Pérez" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                </div>
+                <div class="lg:col-span-3 flex justify-end mt-4">
+                    <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-300">
+                        Registrar Venta
+                    </button>
+                </div>
+            </form>
+            <div id="sale-form-message" class="mt-4 text-center text-sm font-medium hidden"></div>
+        </section>
+
+        <!-- Sales KPIs Section -->
+        <section id="sales-kpi-section" class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8 mb-8">
+            <!-- Sales KPI cards will be generated here by JS -->
+        </section>
+
+        <!-- Latest Sales Records Section -->
+        <section class="bg-white p-6 rounded-xl shadow-lg mt-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Últimas Ventas Registradas</h2>
+            <!-- Sales Filter Controls -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 items-end">
+                <div>
+                    <label for="sale-search-input" class="block text-sm font-medium text-gray-700">Buscar en Ventas</label>
+                    <input type="text" id="sale-search-input" placeholder="Ej: Cliente Juan" class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                </div>
+                <div>
+                    <label for="sale-date-start" class="block text-sm font-medium text-gray-700">Fecha Inicio</label>
+                    <input type="date" id="sale-date-start" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                </div>
+                <div>
+                    <label for="sale-date-end" class="block text-sm font-medium text-gray-700">Fecha Fin</label>
+                    <input type="date" id="sale-date-end" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md form-input">
+                </div>
+            </div>
+            <div class="overflow-x-auto max-h-[40vh] relative">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="table-header-sticky">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="saleDate">Fecha</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="itemName">Artículo</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="quantitySold">Cantidad</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="salePricePerUnit">Precio Unitario (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Total Venta (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider cursor-pointer" data-sort="profitGenerated">Ganancia (USD)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Comentarios</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Acciones</th> <!-- New: Actions column for sales -->
+                        </tr>
+                    </thead>
+                    <tbody id="sales-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Sales rows generated by JS -->
+                    </tbody>
+                </table>
+                <div id="no-sales-results" class="text-center py-10 text-gray-500 hidden">
+                    No se encontraron ventas registradas.
+                </div>
+            </div>
+        </section>
+
+        <!-- Sales Reports Section (NEW) -->
+        <section class="bg-white p-6 rounded-xl shadow-lg mt-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Reportes de Ventas</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="chart-container">
+                    <h3 class="text-lg font-semibold mb-4 text-center">Ganancias por Mes</h3>
+                    <canvas id="monthlyProfitChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3 class="text-lg font-semibold mb-4 text-center">Total de Ventas por Marca</h3>
+                    <canvas id="salesByBrandChart"></canvas>
+                </div>
+                <!-- You can add more charts here -->
+            </div>
+        </section>
+    </div>
+
+    <script type="module">
+        // --- FIREBASE IMPORTS ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+        // --- GLOBAL APP ID ---
+        // This appId is used to construct the Firestore collection paths.
+        // It's crucial that this matches the actual path where your data is stored in Firestore.
+        // If you are running this in a Canvas environment, `__app_id` will be provided.
+        // Otherwise, it defaults to your Firebase project ID for consistency.
+        const firebaseConfigFromImage = {
+          // ¡¡¡IMPORTANTE!!! PEGA AQUÍ TU API KEY EXACTA DE LA CONSOLA DE FIREBASE.
+          // Por ejemplo: apiKey: "AIzaSyC...",
+          apiKey: "AIzaSyDMJj6k8njhKRHA4eTOsSV-HMxRhdTt04E", // <--- API KEY ACTUALIZADA
+          authDomain: "tcgimportar-final.firebaseapp.com",
+          projectId: "tcgimportar-final",
+          storageBucket: "tcgimportar-final.appspot.com",
+          messagingSenderId: "906212645402",
+          appId: "1:906212645402:web:ada4b9079bf863aa8b8fa3",
+          measurementId: "G-2YT0YYQJ56" // This might be optional, depending on your Firebase setup
+        };
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfigFromImage.projectId;
+
+        // --- FIREBASE CONFIGURATION ---
+        const firebaseConfig = firebaseConfigFromImage;
+
+
+        // Declare app, db, auth variables globally
+        let app;
+        let db;
+        let auth;
+
+        let userId = null;
+        let isAuthReady = false; // Flag to indicate if authentication is ready
+
+        // --- GLOBAL STATE & ELEMENTS ---
+        let inventoryData = []; // This will now be populated by Firestore
+        let salesData = []; // New: To store sales records
+        let currentSort = { column: 'marca', order: 'asc' }; // For inventory table
+        let currentSaleSort = { column: 'saleDate', order: 'desc' }; // For sales table
+        const kpiSection = document.getElementById('kpi-section');
+        const salesKpiSection = document.getElementById('sales-kpi-section'); // New: Sales KPI section
+        const tableBody = document.getElementById('inventory-table-body');
+        const salesTableBody = document.getElementById('sales-table-body'); // New: Sales table body
+        const brandFilter = document.getElementById('brand-filter');
+        const collectionFilter = document.getElementById('collection-filter');
+        const expansionFilter = document.getElementById('expansion-filter');
+        const itemFilter = document.getElementById('item-filter');
+        const searchInput = document.getElementById('search-input');
+        const noResultsDiv = document.getElementById('no-results');
+        const noSalesResultsDiv = document.getElementById('no-sales-results'); // New: No sales results div
+
+        // Confirmation modal
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const confirmButton = document.getElementById('confirm-button');
+        const cancelButton = document.getElementById('cancel-button');
+        let onConfirmCallback = null; // Callback for the action to be confirmed
+
+        // Loading indicator
+        const loadingOverlay = document.getElementById('loading-overlay');
+
+        // Toast container
+        const toastContainer = document.getElementById('toast-container');
+
+        // New stock form elements
+        const addStockForm = document.getElementById('add-stock-form');
+        const newMarcaSelect = document.getElementById('new-marca');
+        const newColeccionSelect = document.getElementById('new-coleccion');
+        const newExpansionInput = document.getElementById('new-expansion');
+        const newArticuloSelect = document.getElementById('new-articulo');
+        const newComentariosInput = document.getElementById('new-comentarios');
+        const newIdiomaSelect = document.getElementById('new-idioma');
+        const newCantidadInput = document.getElementById('new-cantidad');
+        const newCostoInput = document.getElementById('new-costo');
+        const newShippingCommissionInput = document.getElementById('new-shipping-commission'); // New: Shipping commission input for new stock
+        const newVentaInput = document.getElementById('new-venta');
+        const newVentaArsInput = document.getElementById('new-venta-ars');
+        const newMargenGananciaInput = document.getElementById('new-margen-ganancia');
+        const newEstadoSelect = document.getElementById('new-estado');
+        const newImageUrlInput = document.getElementById('new-image-url'); // New image URL input
+        const formMessage = document.getElementById('form-message');
+        const dolarBlueInput = document.getElementById('dolar-blue-input');
+        const expansionsDatalist = document.getElementById('expansions-datalist');
+
+        // Error message elements for Add Stock form
+        const errorNewMarca = document.getElementById('error-new-marca');
+        const errorNewColeccion = document.getElementById('error-new-coleccion');
+        const errorNewExpansion = document.getElementById('error-new-expansion');
+        const errorNewArticulo = document.getElementById('error-new-articulo');
+        const errorNewIdioma = document.getElementById('error-new-idioma');
+        const errorNewCantidad = document.getElementById('error-new-cantidad');
+        const errorNewCosto = document.getElementById('error-new-costo');
+        const errorNewShippingCommission = document.getElementById('error-new-shipping-commission'); // New error element for shipping commission
+        const errorNewVenta = document.getElementById('error-new-venta');
+        const errorNewEstado = document.getElementById('error-new-estado'); 
+
+        // Edit Item Modal Elements
+        const editItemModal = document.getElementById('edit-item-modal');
+        const editItemForm = document.getElementById('edit-item-form');
+        const editItemId = document.getElementById('edit-item-id');
+        const editMarca = document.getElementById('edit-marca');
+        const editColeccion = document.getElementById('edit-coleccion');
+        const editExpansion = document.getElementById('edit-expansion');
+        const editArticulo = document.getElementById('edit-articulo');
+        const editComentarios = document.getElementById('edit-comentarios');
+        const editIdioma = document.getElementById('edit-idioma');
+        const editCantidad = document.getElementById('edit-cantidad');
+        const editCosto = document.getElementById('edit-costo');
+        const editShippingCommission = document.getElementById('edit-shipping-commission');
+        const editVenta = document.getElementById('edit-venta');
+        const editMargenGanancia = document.getElementById('edit-margen-ganancia');
+        const editEstado = document.getElementById('edit-estado');
+        const editImageUrl = document.getElementById('edit-image-url');
+        const editFormMessage = document.getElementById('edit-form-message');
+
+        // New sales form elements
+        const addSaleForm = document.getElementById('add-sale-form');
+        const saleItemSelect = document.getElementById('sale-item-select');
+        const saleQuantityInput = document.getElementById('sale-quantity-input');
+        const salePricePerUnitInput = document.getElementById('sale-price-per-unit-input');
+        const saleDateInput = document.getElementById('sale-date-input');
+        const saleCommentsInput = document.getElementById('sale-comments-input');
+        const saleFormMessage = document.getElementById('sale-form-message'); // Message for sales form
+
+        // Error message elements for Add Sale form
+        const errorSaleItemSelect = document.getElementById('error-sale-item-select');
+        const errorSaleQuantityInput = document.getElementById('error-sale-quantity-input');
+        const errorSalePricePerUnitInput = document.getElementById('error-sale-price-per-unit-input');
+        const errorSaleDateInput = document.getElementById('error-sale-date-input');
+
+        // Sales Table Filters
+        const saleSearchInput = document.getElementById('sale-search-input');
+        const saleDateStartInput = document.getElementById('sale-date-start');
+        const saleDateEndInput = document.getElementById('sale-date-end');
+
+        // Export button
+        const exportCsvButton = document.getElementById('export-csv-button');
+
+        // Dark mode toggle button
+        const themeToggle = document.getElementById('theme-toggle');
+
+        // Chart instances
+        let monthlyProfitChartInstance = null;
+        let salesByBrandChartInstance = null;
+
+        // --- ARTICLE MAPPINGS FOR NEW STOCK FORM ---
+        const articleMappings = {
+            'Pokémon TCG': ['Booster Box', 'Elite Trainer Box', 'Booster Bundle', 'Collection Box', 'Mini Tin', 'Blister Pack', 'Single Pack', 'Promo Pack', 'Deck Box'],
+            'Magic: The Gathering': ['Booster Box', 'Bundle', 'Commander Deck', 'Pre-release Pack', 'Single Pack', 'Gift Set', 'Fat Pack', 'Set Booster Box', 'Draft Booster Box', 'Collector Booster Box', 'Jumpstart Booster Box', 'Theme Booster'],
+            'One Piece Card Game': ['Booster Box', 'Starter Deck', 'Single Pack', 'Gift Set', 'Display Box', 'Tournament Pack'],
+            'Disney Lorcana': ['Booster Box', 'Starter Deck', 'Gift Set', 'Booster Pack', 'Illumineer\'s Trove', 'Playmat'],
+            'Accesorios': ['Sleeves', 'Toploaders', 'Binders/Portfolios', 'Playmat', 'Deck Box', 'Penny Sleeves', 'Storage Boxes', 'Dice', 'Counters', 'Booster Protectors']
+        };
+
+        // --- COLLECTION MAPPINGS (Broader Categories) ---
+        const collectionMappings = {
+            'Pokémon TCG': [
+                'Scarlet & Violet Series', 'Sword & Shield Series', 'Sun & Moon Series', 'XY Series',
+                'Black & White Series', 'Diamond & Pearl Series', 'EX Series', 'Base Set Era', 'Promotional Cards'
+            ].sort(),
+            'Magic: The Gathering': [
+                'Standard Sets', 'Modern Sets', 'Commander Products', 'Masters Sets', 'Supplemental Sets', 'Horizons Sets', 'Universes Beyond'
+            ].sort(),
+            'One Piece Card Game': [
+                'Main Sets', 'Starter Decks', 'Promotional Cards'
+            ].sort(),
+            'Disney Lorcana': [
+                'Chapter Sets', 'Gift Sets', 'Promotional Cards'
+            ].sort(),
+            'Accesorios': [
+                'General'
+            ].sort()
+        };
+
+        // --- EXPANSION MAPPINGS (Specific Expansions per Broad Collection) ---
+        const expansionMappings = {
+            'Scarlet & Violet Series': [
+                'Scarlet & Violet Base', 'Paldea Evolved', 'Obsidian Flames', '151', 'Paradox Rift',
+                'Paldean Fates', 'Temporal Forces', 'Twilight Masquerade', 'Prismatic Evolutions',
+                'Journey Together', 'Destined Rivals', 'Black Bolt', 'White Flare', 'Mega Evolution',
+                'Shrouded Fable', 'Night Wanderer', 'Crimson Haze'
+            ].sort(),
+            'Sword & Shield Series': [
+                'Sword & Shield Base', 'Rebel Clash', 'Darkness Ablaze', 'Vivid Voltage', 'Battle Styles', 'Chilling Reign',
+                'Evolving Skies', 'Fusion Strike', 'Brilliant Stars', 'Astral Radiance', 'Pokémon GO', 'Lost Origin',
+                'Silver Tempest', 'Crown Zenith', 'Shining Fates', 'Champion\'s Path'
+            ].sort(),
+            'Sun & Moon Series': [
+                'Sun & Moon Base', 'Guardians Rising', 'Burning Shadows', 'Crimson Invasion', 'Ultra Prism', 'Forbidden Light',
+                'Celestial Storm', 'Dragon Majesty', 'Lost Thunder', 'Team Up', 'Detective Pikachu', 'Unbroken Bonds',
+                'Unified Minds', 'Cosmic Eclipse'
+            ].sort(),
+            'XY Series': [
+                'XY Base', 'Flashfire', 'Furious Fists', 'Phantom Forces', 'Primal Clash', 'Roaring Skies',
+                'Ancient Origins', 'BREAKthrough', 'BREAKpoint', 'Generations', 'XY Evolutions'
+            ].sort(),
+            'Black & White Series': [
+                'Black & White Base', 'Emerging Powers', 'Noble Victories', 'Next Destinies', 'Dark Explorers',
+                'Dragons Exalted', 'Boundaries Crossed', 'Plasma Storm', 'Plasma Freeze', 'Plasma Blast',
+                'Legendary Treasures'
+            ].sort(),
+            'Diamond & Pearl Series': [
+                'Diamond & Pearl Base', 'Mysterious Treasures', 'Secret Wonders', 'Great Encounters', 'Majestic Dawn',
+                'Legends Awakened', 'Stormfront', 'Platinum', 'Rising Rivals', 'Supreme Victors', 'Arceus', 'HeartGold & SoulSilver'
+            ].sort(),
+            'EX Series': [
+                'EX Ruby & Sapphire', 'EX Sandstorm', 'EX Dragon', 'EX Team Magma vs Team Aqua', 'EX Hidden Legends',
+                'EX FireRed & LeafGreen', 'EX Deoxys', 'EX Emerald', 'EX Unseen Forces', 'EX Delta Species',
+                'EX Legend Maker', 'EX Holon Phantoms', 'EX Crystal Guardians', 'EX Dragon Frontiers', 'EX Power Keepers'
+            ].sort(),
+            'Base Set Era': [
+                'Base Set', 'Jungle', 'Fossil', 'Base Set 2', 'Team Rocket', 'Gym Heroes', 'Gym Challenge',
+                'Neo Genesis', 'Neo Discovery', 'Neo Revelation', 'Neo Destiny', 'Legendary Collection', 'Expedition Base Set',
+                'Aquapolis', 'Skyridge'
+            ].sort(),
+            'Promotional Cards': [
+                'Black Star Promos', 'POP Series', 'McDonald\'s Promos', 'Miscellaneous Promos'
+            ].sort(),
+            // Magic: The Gathering Expansions
+            'Standard Sets': [
+                'Bloomburrow', 'Duskmourn: House of Horror', 'Thunder Junction', 'Murders at Karlov Manor', 'The Lost Caverns of Ixalan',
+                'Wilds of Eldraine', 'March of the Machine', 'Phyrexia: All Will Be One', 'Dominaria United', 'Streets of New Capenna',
+                'Kamigawa: Neon Dynasty', 'Innistrad: Crimson Vow', 'Innistrad: Midnight Hunt', 'Forgotten Realms', 'Strixhaven: School of Mages',
+                'Kaldheim', 'Zendikar Rising', 'Ikoria: Lair of Beasts', 'Theros Beyond Death', 'Eldraine', 'Core Set 2021', 'Core Set 2020'
+            ].sort(),
+            'Modern Sets': [
+                'Modern Horizons 3', 'Modern Horizons 2', 'Modern Horizons'
+            ].sort(),
+            'Commander Products': [
+                'Commander Legends: Battle for Baldur\'s Gate', 'Commander Masters', 'Commander (Various Years)'
+            ].sort(),
+            'Masters Sets': [
+                'Double Masters 2022', 'Double Masters', 'Ultimate Masters', 'Modern Masters (Various Years)'
+            ].sort(),
+            'Supplemental Sets': [
+                'Jumpstart 2022', 'Jumpstart', 'Secret Lair Drop Series (Various)'
+            ].sort(),
+            'Horizons Sets': [
+                'Modern Horizons 3', 'Modern Horizons 2', 'Modern Horizons'
+            ].sort(),
+            'Universes Beyond': [
+                'Fallout', 'Doctor Who', 'The Lord of the Rings: Tales of Middle-earth', 'Warhammer 40,000'
+            ].sort(),
+            // One Piece Card Game Expansions
+            'Main Sets': [
+                'OP-01 Romance Dawn', 'OP-02 Paramount War', 'OP-03 Pillars of Strength', 'OP-04 Kingdoms of Intrigue',
+                'OP-05 Awakening of the New Era', 'OP-06 Wings of the Captain', 'OP-07 500 Years in the Future',
+                'OP-08 Two Legends', 'OP-09 Four Emperors', 'OP-10 The New Age'
+            ].sort(),
+            'Starter Decks': [
+                'ST-01 Straw Hat Crew', 'ST-02 Worst Generation', 'ST-03 The Seven Warlords of the Sea',
+                'ST-04 Animal Kingdom Pirates', 'ST-05 Film Edition', 'ST-06 Absolute Justice',
+                'ST-07 Big Mom Pirates', 'ST-08 Side Monkey', 'ST-09 Yamato'
+            ].sort(),
+            // Disney Lorcana Expansions
+            'Chapter Sets': [
+                'The First Chapter', 'Rise of the Floodborn', 'Into the Inklands', 'Ursula\'s Return', 'Shimmering Skies'
+            ].sort(),
+            'Gift Sets': [
+                'Gift Set: Mickey & Minnie' // Example, add more if known
+            ].sort(),
+            // Accessories Expansions (or sub-categories)
+            'General': [
+                'Standard Sleeves', 'Japanese Sleeves', 'Toploaders 3x4', 'Toploaders 5x7', '9-Pocket Binders',
+                '12-Pocket Binders', 'Standard Playmats', 'Custom Playmats', 'Simple Deck Boxes',
+                'Double Deck Boxes', 'Penny Sleeves', 'Storage Boxes', 'Dice', 'Counters',
+                'Booster Protectors', 'Others'
+            ].sort()
+        };
+        
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize Firebase services after the DOM is fully loaded
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            const analytics = getAnalytics(app); 
+
+            // Now that Firebase is initialized, we can set up the authentication listener
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    isAuthReady = true;
+                    console.log("User authenticated with ID:", userId);
+                    setupFirestoreListeners(); // Start listening to Firestore after authentication
+                } else {
+                    try {
+                        await signInAnonymously(auth);
+                        console.log("Signed in anonymously.");
+                    } catch (error) {
+                        console.error("Error signing in:", error);
+                        showToast('Error de autenticación. Verifica tu configuración de Firebase y las reglas de seguridad.', 'error');
+                    }
+                }
+                populateNewStockFormFilters();
+                addEventListeners();
+                setTodayDateForSaleForm(); // Set default date
+                loadTheme(); // Load theme on page load
+            });
+        });
+
+        // --- FIRESTORE LISTENERS ---
+        function setupFirestoreListeners() {
+            if (!userId || !db) {
+                console.error("User ID or Firestore DB is not available for Firestore listeners. Cannot set up listeners.");
+                return;
+            }
+            
+            // Listener for Inventory Data
+            const inventoryCollectionPath = `artifacts/${appId}/public/data/sharedInventory`; 
+            console.log("Setting up Firestore listener for inventory collection:", inventoryCollectionPath); 
+            onSnapshot(collection(db, inventoryCollectionPath), (snapshot) => {
+                inventoryData = [];
+                snapshot.forEach((doc) => {
+                    inventoryData.push({ id: doc.id, ...doc.data() });
+                });
+                console.log("Firestore inventory listener updated. Total items:", inventoryData.length); 
+                renderAll(); // Re-render everything when inventory data changes
+                populateSaleFormItemSelect(); // Update sales form item dropdown
+                checkLowStockAlerts(); // Check for low stock after data update
+            }, (error) => {
+                console.error("Error fetching inventory data:", error);
+                showToast(`Error al cargar el inventario: ${getFirebaseErrorMessage(error)}. Verifica tu conexión y las reglas de seguridad de Firestore.`, 'error');
+            });
+
+            // Listener for Sales Data (New)
+            const salesCollectionPath = `artifacts/${appId}/public/data/salesRecords`;
+            console.log("Setting up Firestore listener for sales collection:", salesCollectionPath);
+            onSnapshot(collection(db, salesCollectionPath), (snapshot) => {
+                salesData = [];
+                snapshot.forEach((doc) => {
+                    salesData.push({ id: doc.id, ...doc.data() });
+                });
+                // Sort sales data by date, most recent first
+                salesData.sort((a, b) => new Date(b.saleDate) - new Date(a.saleDate));
+                console.log("Firestore sales listener updated. Total sales:", salesData.length);
+                renderSalesSection(); // Re-render sales section when sales data changes
+                renderSalesCharts(); // Render sales charts
+            }, (error) => {
+                console.error("Error fetching sales data:", error);
+                showToast(`Error al cargar las ventas: ${getFirebaseErrorMessage(error)}.`, 'error');
+            });
+        }
+
+        // --- RENDER FUNCTIONS ---
+        function renderAll() {
+            const filters = getFilters();
+            let filteredData = applyFilters(filters);
+            
+            // Apply sorting for inventory
+            filteredData.sort((a, b) => {
+                const aValue = a[currentSort.column] || '';
+                const bValue = b[currentSort.column] || '';
+                // Handle numeric sorting for specific columns
+                if (['cantidad', 'costo', 'venta', 'ventaArs', 'margenGanancia'].includes(currentSort.column)) { 
+                    return currentSort.order === 'asc' ? aValue - bValue : bValue - aValue;
+                }
+                // Default to string comparison for others
+                return currentSort.order === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+            });
+
+            renderKPIs(filteredData);
+            renderTable(filteredData);
+            populateFilters(); // Ensure filters are populated with updated data
+        }
+
+        function renderKPIs(data) {
+            // Use stored costoNeto for KPI calculations
+            const totalStockValueCostNeto = data.reduce((sum, item) => sum + (item.cantidad * (item.costoNeto || item.costo)), 0); 
+            const totalStockValueSale = data.reduce((sum, item) => sum + (item.cantidad * item.venta), 0);
+            const potentialProfit = totalStockValueSale - totalStockValueCostNeto; 
+            const totalItems = data.reduce((sum, item) => sum + item.cantidad, 0);
+
+            const kpis = [
+                { title: 'Valor Total de Stock (Costo Neto)', value: `$${totalStockValueCostNeto.toFixed(2)}`, icon: '💰' },
+                { title: 'Valor Total de Venta', value: `$${totalStockValueSale.toFixed(2)}`, icon: '📈' },
+                { title: 'Ganancia Bruta Potencial', value: `$${potentialProfit.toFixed(2)}`, icon: '💸' },
+                { title: 'Total de Artículos en Stock', value: totalItems.toLocaleString(), icon: '📦' }
+            ];
+
+            kpiSection.innerHTML = kpis.map(kpi => `
+                <div class="kpi-card p-6 flex items-center">
+                    <div class="text-4xl mr-4">${kpi.icon}</div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">${kpi.title}</p>
+                        <p class="text-2xl font-bold text-gray-900">${kpi.value}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderTable(data) {
+            if (data.length === 0) {
+                tableBody.innerHTML = '';
+                noResultsDiv.classList.remove('hidden');
+                return;
+            }
+            noResultsDiv.classList.add('hidden');
+
+            const dolarBlueValue = parseFloat(dolarBlueInput.value) || 1; 
+
+            tableBody.innerHTML = data.map(item => {
+                // Determine stock level class
+                let stockClass = '';
+                if (item.cantidad === 0) {
+                    stockClass = 'zero-stock';
+                } else if (item.cantidad < 5) {
+                    stockClass = 'low-stock';
+                }
+
+                const imageUrl = item.imageUrl || 'https://placehold.co/50x50/e2e8f0/4a5568?text=No+Img'; // Placeholder image
+
+                return `
+                <tr class="hover:bg-gray-50 ${stockClass}">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <img src="${imageUrl}" alt="Imagen de ${item.articulo}" class="w-12 h-12 object-cover rounded-md" onerror="this.onerror=null;this.src='https://placehold.co/50x50/e2e8f0/4a5568?text=No+Img';">
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.marca}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${item.coleccion}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${item.expansion}</td> 
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${item.articulo}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${item.comentarios}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+                        <div class="quantity-control">
+                            <button class="quantity-button" onclick="updateQuantity('${item.id}', -1)">-</button>
+                            <span class="quantity-display text-gray-900">${item.cantidad}</span>
+                            <button class="quantity-button" onclick="updateQuantity('${item.id}', 1)">+</button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">$${item.costo.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">$${item.venta.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">ARS$${(item.venta * dolarBlueValue).toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-700">$${item.margenGanancia.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button onclick="showEditItemModal('${item.id}')" class="text-blue-600 hover:text-blue-900 mr-4">Editar</button>
+                        <button onclick="showConfirmationModal('¿Estás seguro de que quieres eliminar este ítem?', () => deleteItem('${item.id}'))" class="text-red-600 hover:text-red-900">Eliminar</button>
+                    </td>
+                </tr>
+            `;
+            }).join('');
+        }
+
+        function renderSalesSection() {
+            // Render Sales KPIs
+            const totalSalesRevenue = salesData.reduce((sum, sale) => sum + (sale.quantitySold * sale.salePricePerUnit), 0);
+            const totalProfitFromSales = salesData.reduce((sum, sale) => sum + sale.profitGenerated, 0);
+
+            const salesKpis = [
+                { title: 'Total de Ventas Realizadas', value: `$${totalSalesRevenue.toFixed(2)}`, icon: '💸' },
+                { title: 'Ganancia Total por Ventas', value: `$${totalProfitFromSales.toFixed(2)}`, icon: '💰' }
+            ];
+
+            salesKpiSection.innerHTML = salesKpis.map(kpi => `
+                <div class="kpi-card p-6 flex items-center">
+                    <div class="text-4xl mr-4">${kpi.icon}</div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">${kpi.title}</p>
+                        <p class="text-2xl font-bold text-gray-900">${kpi.value}</p>
+                    </div>
+                </div>
+            `).join('');
+
+            // Apply filters for sales table
+            const salesFilters = getSalesFilters();
+            let filteredSalesData = applySalesFilters(salesFilters);
+
+            // Apply sorting for sales table
+            filteredSalesData.sort((a, b) => {
+                const aValue = a[currentSaleSort.column] || '';
+                const bValue = b[currentSaleSort.column] || '';
+                if (['quantitySold', 'salePricePerUnit', 'profitGenerated'].includes(currentSaleSort.column)) {
+                    return currentSaleSort.order === 'asc' ? aValue - bValue : bValue - aValue;
+                }
+                return currentSaleSort.order === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+            });
+
+            // Render Sales Table
+            if (filteredSalesData.length === 0) {
+                salesTableBody.innerHTML = '';
+                noSalesResultsDiv.classList.remove('hidden');
+                return;
+            }
+            noSalesResultsDiv.classList.add('hidden');
+
+            salesTableBody.innerHTML = filteredSalesData.map(sale => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${sale.saleDate}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${sale.itemName}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${sale.quantitySold}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">$${sale.salePricePerUnit.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">$${(sale.quantitySold * sale.salePricePerUnit).toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-700">$${sale.profitGenerated.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${sale.saleComments}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button onclick="showConfirmationModal('¿Estás seguro de que quieres eliminar este registro de venta? El stock se repondrá.', () => deleteSale('${sale.id}'))" class="text-red-600 hover:text-red-900">Eliminar</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // --- CHART RENDERING ---
+        function renderSalesCharts() {
+            // Destroy existing chart instances if they exist
+            if (monthlyProfitChartInstance) {
+                monthlyProfitChartInstance.destroy();
+            }
+            if (salesByBrandChartInstance) {
+                salesByBrandChartInstance.destroy();
+            }
+
+            // Prepare data for Monthly Profit Chart
+            const monthlyProfit = salesData.reduce((acc, sale) => {
+                const monthYear = sale.saleDate.substring(0, 7); // YYYY-MM
+                acc[monthYear] = (acc[monthYear] || 0) + sale.profitGenerated;
+                return acc;
+            }, {});
+
+            const sortedMonths = Object.keys(monthlyProfit).sort();
+            const monthlyProfitLabels = sortedMonths.map(my => {
+                const [year, month] = my.split('-');
+                const date = new Date(year, month - 1); // Month is 0-indexed for Date object
+                return date.toLocaleString('es-ES', { month: 'short', year: 'numeric' });
+            });
+            const monthlyProfitValues = sortedMonths.map(my => monthlyProfit[my]);
+
+            const monthlyProfitCtx = document.getElementById('monthlyProfitChart').getContext('2d');
+            monthlyProfitChartInstance = new Chart(monthlyProfitCtx, {
+                type: 'bar',
+                data: {
+                    labels: monthlyProfitLabels,
+                    datasets: [{
+                        label: 'Ganancia (USD)',
+                        data: monthlyProfitValues,
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Prepare data for Sales by Brand Chart
+            const salesByBrand = salesData.reduce((acc, sale) => {
+                const item = inventoryData.find(invItem => invItem.id === sale.itemId);
+                if (item) {
+                    acc[item.marca] = (acc[item.marca] || 0) + (sale.quantitySold * sale.salePricePerUnit);
+                }
+                return acc;
+            }, {});
+
+            const salesByBrandLabels = Object.keys(salesByBrand);
+            const salesByBrandValues = Object.values(salesByBrand);
+
+            const salesByBrandCtx = document.getElementById('salesByBrandChart').getContext('2d');
+            salesByBrandChartInstance = new Chart(salesByBrandCtx, {
+                type: 'pie',
+                data: {
+                    labels: salesByBrandLabels,
+                    datasets: [{
+                        data: salesByBrandValues,
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.6)',
+                            'rgba(54, 162, 235, 0.6)',
+                            'rgba(255, 206, 86, 0.6)',
+                            'rgba(75, 192, 192, 0.6)',
+                            'rgba(153, 102, 255, 0.6)',
+                            'rgba(255, 159, 64, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+        }
+
+        // --- FILTER & EVENT LOGIC ---
+        function populateFilters() {
+            // Store current selections before clearing options
+            const currentBrand = brandFilter.value;
+            const currentCollection = collectionFilter.value;
+            const currentExpansion = expansionFilter.value;
+            const currentItem = itemFilter.value;
+
+            // Clear existing options for all filters
+            brandFilter.innerHTML = '';
+            collectionFilter.innerHTML = '';
+            expansionFilter.innerHTML = '';
+            itemFilter.innerHTML = '';
+
+            // Add 'Todos' option first for all filters
+            brandFilter.add(new Option('Todos', 'Todos'));
+            collectionFilter.add(new Option('Todos', 'Todos'));
+            expansionFilter.add(new Option('Todos', 'Todos'));
+            itemFilter.add(new Option('Todos', 'Todos'));
+
+            if (inventoryData.length === 0) {
+                // If no data, ensure 'Todos' is selected and return
+                brandFilter.value = 'Todos';
+                collectionFilter.value = 'Todos';
+                expansionFilter.value = 'Todos';
+                itemFilter.value = 'Todos';
+                return;
+            }
+
+            // Populate unique options from inventoryData
+            const brands = [...new Set(inventoryData.map(item => item.marca))].sort();
+            const collections = [...new Set(inventoryData.map(item => item.coleccion))].sort();
+            const expansions = [...new Set(inventoryData.map(item => item.expansion))].sort();
+            const articles = [...new Set(inventoryData.map(item => item.articulo))].sort();
+
+            brands.forEach(b => brandFilter.add(new Option(b, b)));
+            collections.forEach(c => collectionFilter.add(new Option(c, c)));
+            expansions.forEach(e => expansionFilter.add(new Option(e, e)));
+            articles.forEach(a => itemFilter.add(new Option(a, a)));
+
+            // Attempt to re-select previous values, or default to 'Todos' if not found
+            brandFilter.value = brands.includes(currentBrand) ? currentBrand : 'Todos';
+            collectionFilter.value = collections.includes(currentCollection) ? currentCollection : 'Todos';
+            expansionFilter.value = expansions.includes(currentExpansion) ? currentExpansion : 'Todos';
+            itemFilter.value = articles.includes(currentItem) ? currentItem : 'Todos';
+        }
+
+        function getFilters() {
+            return {
+                brand: brandFilter.value,
+                collection: collectionFilter.value,
+                expansion: expansionFilter.value, // Get expansion filter value
+                item: itemFilter.value, 
+                search: searchInput.value.toLowerCase()
+            };
+        }
+
+        function applyFilters(filters) {
+            return inventoryData.filter(d => 
+                (filters.brand === 'Todos' || d.marca === filters.brand) &&
+                (filters.collection === 'Todos' || d.coleccion === filters.collection) &&
+                (filters.expansion === 'Todos' || d.expansion === filters.expansion) && // Apply expansion filter
+                (filters.item === 'Todos' || d.articulo === filters.item) && 
+                (d.comentarios.toLowerCase().includes(filters.search))
+            );
+        }
+
+        function getSalesFilters() {
+            return {
+                search: saleSearchInput.value.toLowerCase(),
+                dateStart: saleDateStartInput.value,
+                dateEnd: saleDateEndInput.value
+            };
+        }
+
+        function applySalesFilters(filters) {
+            return salesData.filter(sale => {
+                const matchesSearch = sale.saleComments.toLowerCase().includes(filters.search) ||
+                                      sale.itemName.toLowerCase().includes(filters.search);
+                
+                const saleDate = new Date(sale.saleDate);
+                const startDate = filters.dateStart ? new Date(filters.dateStart) : null;
+                const endDate = filters.dateEnd ? new Date(filters.dateEnd) : null;
+
+                const matchesDate = (!startDate || saleDate >= startDate) &&
+                                    (!endDate || saleDate <= endDate);
+                
+                return matchesSearch && matchesDate;
+            });
+        }
+        
+        function addEventListeners() {
+            brandFilter.addEventListener('change', renderAll);
+            collectionFilter.addEventListener('change', renderAll);
+            expansionFilter.addEventListener('change', renderAll); 
+            itemFilter.addEventListener('change', renderAll);
+            searchInput.addEventListener('input', renderAll);
+            addStockForm.addEventListener('submit', handleAddStock);
+            addSaleForm.addEventListener('submit', handleAddSale); // New: Sales form submission
+            // Dolar blue input now triggers renderAll directly via oninput attribute in HTML
+            exportCsvButton.addEventListener('click', exportToCSV); // Event listener for export button
+            
+            // Event listeners for dynamic options in new stock form
+            newMarcaSelect.addEventListener('change', () => {
+                updateNewCollectionAndExpansionOptions();
+                updateNewArticleOptions();
+            });
+            newColeccionSelect.addEventListener('change', updateNewExpansionOptions);
+            newCostoInput.addEventListener('input', updateCalculatedFields); 
+            newVentaInput.addEventListener('input', updateCalculatedFields); 
+            newShippingCommissionInput.addEventListener('input', updateCalculatedFields); // New: Event listener for new shipping commission
+
+            // New: Event listener for sales item select to auto-fill price
+            saleItemSelect.addEventListener('change', autoFillSalePrice);
+
+            // Event listeners for sales table filters
+            saleSearchInput.addEventListener('input', renderSalesSection);
+            saleDateStartInput.addEventListener('change', renderSalesSection);
+            saleDateEndInput.addEventListener('change', renderSalesSection);
+
+
+            // Event listeners for table sorting (Inventory)
+            document.querySelectorAll('#inventory-table-body').forEach(tbody => {
+                tbody.previousElementSibling.querySelectorAll('th[data-sort]').forEach(th => {
+                    th.addEventListener('click', () => {
+                        const column = th.dataset.sort;
+                        if (currentSort.column === column) {
+                            currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            currentSort.column = column;
+                            currentSort.order = 'asc';
+                        }
+                        renderAll();
+                    });
+                });
+            });
+
+            // Event listeners for table sorting (Sales)
+            document.querySelectorAll('#sales-table-body').forEach(tbody => {
+                tbody.previousElementSibling.querySelectorAll('th[data-sort]').forEach(th => {
+                    th.addEventListener('click', () => {
+                        const column = th.dataset.sort;
+                        if (currentSaleSort.column === column) {
+                            currentSaleSort.order = currentSaleSort.order === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            currentSaleSort.column = column;
+                            currentSaleSort.order = 'asc';
+                        }
+                        renderSalesSection();
+                    });
+                });
+            });
+
+
+            // Event listeners for confirmation modal
+            confirmButton.addEventListener('click', () => {
+                if (onConfirmCallback) {
+                    onConfirmCallback();
+                }
+                hideConfirmationModal();
+            });
+            cancelButton.addEventListener('click', hideConfirmationModal);
+
+            // Edit Item Modal Event Listener
+            editItemForm.addEventListener('submit', handleUpdateItem);
+
+            // Dark mode toggle event listener
+            themeToggle.addEventListener('click', toggleTheme);
+        }
+
+        // --- NEW STOCK FORM LOGIC ---
+        function populateNewStockFormFilters() {
+            const brands = Object.keys(articleMappings).sort();
+            const estados = ['Disponible', 'Pocas Unidades', 'Agotado', 'Próximamente'];
+            const idiomas = ['Inglés', 'Español', 'Japonés', 'N/A'];
+
+            newMarcaSelect.innerHTML = brands.map(b => `<option value="${b}">${b}</option>`).join('');
+            newEstadoSelect.innerHTML = estados.map(e => `<option value="${e}">${e}</option>`).join('');
+            newIdiomaSelect.innerHTML = idiomas.map(i => `<option value="${i}">${i}</option>`).join('');
+            
+            // Populate article and collection/expansion options based on the initially selected brand
+            updateNewCollectionAndExpansionOptions(); // Initial population for collections and expansions
+            updateNewArticleOptions(); // Initial population for articles
+            updateCalculatedFields(); 
+        }
+
+        function updateNewArticleOptions() {
+            const selectedBrand = newMarcaSelect.value;
+            // Filter articles based on selected brand
+            const articlesForBrand = articleMappings[selectedBrand] || [];
+            newArticuloSelect.innerHTML = articlesForBrand.map(a => `<option value="${a}">${a}</option>`).join('');
+            // Reset article selection to the first available option or empty
+            newArticuloSelect.value = articlesForBrand[0] || '';
+        }
+
+        function updateNewCollectionAndExpansionOptions() {
+            const selectedBrand = newMarcaSelect.value;
+            // Filter collections based on selected brand
+            const collectionsForBrand = collectionMappings[selectedBrand] || [];
+            newColeccionSelect.innerHTML = collectionsForBrand.map(c => `<option value="${c}">${c}</option>`).join('');
+            // Reset collection selection to the first available option or empty
+            newColeccionSelect.value = collectionsForBrand[0] || '';
+            
+            // Also update expansions when brand or collection changes
+            updateNewExpansionOptions();
+        }
+
+        function updateNewExpansionOptions() {
+            const selectedCollection = newColeccionSelect.value;
+            // Filter expansions based on selected collection
+            const expansionsForCollection = expansionMappings[selectedCollection] || [];
+            expansionsDatalist.innerHTML = expansionsForCollection.map(e => `<option value="${e}">`).join('');
+            // Clear the input field when the collection changes to avoid stale data
+            newExpansionInput.value = '';
+        }
+
+
+        function updateCalculatedFields() {
+            const costoUnitario = parseFloat(newCostoInput.value);
+            const precioVenta = parseFloat(newVentaInput.value);
+            const dolarBlueValue = parseFloat(dolarBlueInput.value) || 1;
+            const shippingCommission = parseFloat(newShippingCommissionInput.value) / 100 || 0; // Use new shipping commission input
+
+            // Calculate Sale Price (ARS)
+            if (!isNaN(precioVenta)) {
+                newVentaArsInput.value = (precioVenta * dolarBlueValue).toFixed(2);
+            } else {
+                newVentaArsInput.value = '';
+            }
+
+            // Calculate Profit Margin (now based on costoUnitario and shipping commission)
+            if (!isNaN(precioVenta) && !isNaN(costoUnitario) && !isNaN(shippingCommission)) {
+                const calculatedCostoNeto = costoUnitario * (1 + shippingCommission);
+                newMargenGananciaInput.value = (precioVenta - calculatedCostoNeto).toFixed(2);
+            } else {
+                newMargenGananciaInput.value = '';
+            }
+        }
+
+        // --- Form Validation ---
+        function validateForm(formId) {
+            let isValid = true;
+            let inputs;
+            let errorElements; 
+
+            // Helper to hide all error messages for a given form's error elements
+            const hideAllErrors = (elements) => {
+                elements.forEach(el => {
+                    if (el) {
+                        el.classList.add('hidden');
+                    }
+                });
+            };
+
+            if (formId === 'add-stock-form') {
+                errorElements = [errorNewMarca, errorNewColeccion, errorNewExpansion, errorNewArticulo, errorNewIdioma, errorNewCantidad, errorNewCosto, errorNewShippingCommission, errorNewVenta, errorNewEstado];
+                hideAllErrors(errorElements); 
+                inputs = [
+                    { el: newMarcaSelect, msg: errorNewMarca, check: () => !!newMarcaSelect.value },
+                    { el: newColeccionSelect, msg: errorNewColeccion, check: () => !!newColeccionSelect.value },
+                    { el: newExpansionInput, msg: errorNewExpansion, check: () => !!newExpansionInput.value },
+                    { el: newArticuloSelect, msg: errorNewArticulo, check: () => !!newArticuloSelect.value },
+                    { el: newIdiomaSelect, msg: errorNewIdioma, check: () => !!newIdiomaSelect.value },
+                    { el: newCantidadInput, msg: errorNewCantidad, check: () => !isNaN(parseInt(newCantidadInput.value)) && parseInt(newCantidadInput.value) >= 0 },
+                    { el: newCostoInput, msg: errorNewCosto, check: () => !isNaN(parseFloat(newCostoInput.value)) && parseFloat(newCostoInput.value) >= 0 },
+                    { el: newShippingCommissionInput, msg: errorNewShippingCommission, check: () => !isNaN(parseFloat(newShippingCommissionInput.value)) && parseFloat(newShippingCommissionInput.value) >= 0 && parseFloat(newShippingCommissionInput.value) <= 100 },
+                    { el: newVentaInput, msg: errorNewVenta, check: () => !isNaN(parseFloat(newVentaInput.value)) && parseFloat(newVentaInput.value) >= 0 },
+                    { el: newEstadoSelect, msg: errorNewEstado, check: () => !!newEstadoSelect.value }
+                ];
+            } else if (formId === 'add-sale-form') {
+                errorElements = [errorSaleItemSelect, errorSaleQuantityInput, errorSalePricePerUnitInput, errorSaleDateInput];
+                hideAllErrors(errorElements); 
+                inputs = [
+                    { el: saleItemSelect, msg: errorSaleItemSelect, check: () => !!saleItemSelect.value },
+                    { el: saleQuantityInput, msg: errorSaleQuantityInput, check: () => !isNaN(parseInt(saleQuantityInput.value)) && parseInt(saleQuantityInput.value) > 0 },
+                    { el: salePricePerUnitInput, msg: errorSalePricePerUnitInput, check: () => !isNaN(parseFloat(salePricePerUnitInput.value)) && parseFloat(salePricePerUnitInput.value) >= 0 },
+                    { el: saleDateInput, msg: errorSaleDateInput, check: () => !!saleDateInput.value }
+                ];
+            } else {
+                return false; // Unknown form
+            }
+
+            // Check each input
+            inputs.forEach(input => {
+                if (!input.check()) {
+                    if (input.msg) {
+                        input.msg.classList.remove('hidden');
+                    }
+                    isValid = false;
+                }
+            });
+
+            return isValid;
+        }
+
+
+        async function handleAddStock(event) {
+            event.preventDefault(); 
+            showLoading(true); // Show loading spinner
+
+            if (!isAuthReady || !userId || !db) {
+                showToast('Autenticación o base de datos no listas. Por favor, espere o recargue la página. Asegúrate de que Firebase esté configurado.', 'error');
+                showLoading(false);
+                return;
+            }
+
+            // Validate form fields
+            if (!validateForm('add-stock-form')) {
+                // If validation fails, specific error messages are already shown by validateForm
+                showToast('Por favor, complete todos los campos obligatorios y asegúrese de que los valores numéricos sean válidos.', 'error');
+                showLoading(false);
+                return;
+            }
+
+            const costoUnitario = parseFloat(newCostoInput.value);
+            const shippingCommission = parseFloat(newShippingCommissionInput.value) / 100 || 0; // Use new shipping commission input
+            const calculatedCostoNeto = costoUnitario * (1 + shippingCommission); // Calculate costoNeto here before saving
+            const precioVenta = parseFloat(newVentaInput.value);
+            const calculatedMargenGanancia = precioVenta - calculatedCostoNeto;
+
+            const newEntry = {
+                marca: newMarcaSelect.value,
+                coleccion: newColeccionSelect.value, 
+                expansion: newExpansionInput.value,
+                articulo: newArticuloSelect.value,
+                comentarios: newComentariosInput.value, 
+                idioma: newIdiomaSelect.value,
+                cantidad: parseInt(newCantidadInput.value),
+                costo: costoUnitario,
+                costoNeto: calculatedCostoNeto, // Store calculated costoNeto
+                venta: precioVenta,
+                margenGanancia: calculatedMargenGanancia, // Store calculated margenGanancia
+                estado: newEstadoSelect.value,
+                imageUrl: newImageUrlInput.value // Include image URL
+            };
+
+            try {
+                const collectionRef = collection(db, `artifacts/${appId}/public/data/sharedInventory`); 
+                const docRef = await addDoc(collectionRef, newEntry); 
+                console.log("Document added with ID: ", docRef.id); 
+                showToast(`Stock agregado exitosamente.`, 'success');
+            }
+            catch (error) {
+                console.error("Error adding document: ", error);
+                showToast(`Error al agregar el stock: ${getFirebaseErrorMessage(error)}. Intente de nuevo.`, 'error');
+            } finally {
+                showLoading(false); // Hide loading spinner
+            }
+
+            addStockForm.reset();
+            populateNewStockFormFilters(); 
+            // The message will auto-hide via showToast
+        }
+
+        // --- EDIT ITEM MODAL LOGIC ---
+        function showEditItemModal(itemId) {
+            const itemToEdit = inventoryData.find(item => item.id === itemId);
+            if (!itemToEdit) {
+                showToast('Error: Ítem no encontrado para editar.', 'error');
+                return;
+            }
+
+            // Populate form fields
+            editItemId.value = itemToEdit.id;
+            editMarca.value = itemToEdit.marca;
+            editColeccion.value = itemToEdit.coleccion;
+            editExpansion.value = itemToEdit.expansion;
+            editArticulo.value = itemToEdit.articulo;
+            editComentarios.value = itemToEdit.comentarios;
+            editCantidad.value = itemToEdit.cantidad;
+            editCosto.value = itemToEdit.costo;
+            // Ensure shippingCommission is stored, default to 0 if not present
+            editShippingCommission.value = itemToEdit.shippingCommission !== undefined ? itemToEdit.shippingCommission * 100 : 20; 
+            editVenta.value = itemToEdit.venta;
+            editImageUrl.value = itemToEdit.imageUrl;
+
+            // Populate dropdowns
+            const idiomas = ['Inglés', 'Español', 'Japonés', 'N/A'];
+            editIdioma.innerHTML = idiomas.map(i => `<option value="${i}">${i}</option>`).join('');
+            editIdioma.value = itemToEdit.idioma;
+
+            const estados = ['Disponible', 'Pocas Unidades', 'Agotado', 'Próximamente'];
+            editEstado.innerHTML = estados.map(e => `<option value="${e}">${e}</option>`).join('');
+            editEstado.value = itemToEdit.estado;
+
+            // Update calculated fields based on current values
+            updateEditCalculatedFields();
+
+            editItemModal.classList.remove('hidden');
+        }
+
+        function hideEditItemModal() {
+            editItemModal.classList.add('hidden');
+            editFormMessage.classList.add('hidden'); // Hide any previous messages
+        }
+
+        function updateEditCalculatedFields() {
+            const costoUnitario = parseFloat(editCosto.value);
+            const precioVenta = parseFloat(editVenta.value);
+            const shippingCommission = parseFloat(editShippingCommission.value) / 100 || 0;
+
+            if (!isNaN(precioVenta) && !isNaN(costoUnitario) && !isNaN(shippingCommission)) {
+                const calculatedCostoNeto = costoUnitario * (1 + shippingCommission);
+                editMargenGanancia.value = (precioVenta - calculatedCostoNeto).toFixed(2);
+            } else {
+                editMargenGanancia.value = '';
+            }
+        }
+
+        async function handleUpdateItem(event) {
+            event.preventDefault();
+            showLoading(true);
+
+            const itemId = editItemId.value;
+            const costoUnitario = parseFloat(editCosto.value);
+            const shippingCommission = parseFloat(editShippingCommission.value) / 100 || 0;
+            const calculatedCostoNeto = costoUnitario * (1 + shippingCommission);
+            const precioVenta = parseFloat(editVenta.value);
+            const calculatedMargenGanancia = precioVenta - calculatedCostoNeto;
+
+            const updatedData = {
+                comentarios: editComentarios.value,
+                idioma: editIdioma.value,
+                cantidad: parseInt(editCantidad.value),
+                costo: costoUnitario,
+                shippingCommission: shippingCommission, // Store the commission used for this item
+                costoNeto: calculatedCostoNeto,
+                venta: precioVenta,
+                margenGanancia: calculatedMargenGanancia,
+                estado: editEstado.value,
+                imageUrl: editImageUrl.value
+            };
+
+            // Basic validation for edit form
+            if (isNaN(updatedData.cantidad) || updatedData.cantidad < 0 ||
+                isNaN(updatedData.costo) || updatedData.costo < 0 ||
+                isNaN(updatedData.venta) || updatedData.venta < 0 ||
+                isNaN(updatedData.shippingCommission) || updatedData.shippingCommission < 0 || updatedData.shippingCommission > 1 ||
+                !updatedData.idioma || !updatedData.estado) {
+                showToast('Por favor, complete todos los campos obligatorios y asegúrese de que los valores numéricos sean válidos en el formulario de edición.', 'error');
+                showLoading(false);
+                return;
+            }
+
+            try {
+                const itemRef = doc(db, `artifacts/${appId}/public/data/sharedInventory`, itemId);
+                await updateDoc(itemRef, updatedData);
+                console.log("Document successfully updated!");
+                showToast('Ítem actualizado exitosamente.', 'success');
+                hideEditItemModal();
+            } catch (error) {
+                console.error("Error updating document: ", error);
+                showToast(`Error al actualizar el ítem: ${getFirebaseErrorMessage(error)}.`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+
+        // --- NEW SALES FORM LOGIC ---
+        function populateSaleFormItemSelect() {
+            saleItemSelect.innerHTML = '<option value="">Selecciona un artículo</option>'; // Clear and add default
+            // Sort inventory data by item name for easier selection
+            const sortedInventory = [...inventoryData].sort((a, b) => {
+                // Prioritize items with stock > 0
+                if (a.cantidad > 0 && b.cantidad === 0) return -1;
+                if (a.cantidad === 0 && b.cantidad > 0) return 1;
+                return a.articulo.localeCompare(b.articulo);
+            });
+
+            sortedInventory.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = `${item.articulo} (${item.marca} - ${item.coleccion} - ${item.expansion}) - Stock: ${item.cantidad}`;
+                // Disable option if stock is 0
+                if (item.cantidad === 0) {
+                    option.disabled = true;
+                    option.textContent += ' (Agotado)';
+                }
+                saleItemSelect.appendChild(option);
+            });
+        }
+
+        function autoFillSalePrice() {
+            const selectedItemId = saleItemSelect.value;
+            const selectedItem = inventoryData.find(item => item.id === selectedItemId);
+            if (selectedItem) {
+                salePricePerUnitInput.value = selectedItem.venta.toFixed(2);
+                saleQuantityInput.max = selectedItem.cantidad; // Set max quantity to available stock
+                saleQuantityInput.value = Math.min(1, selectedItem.cantidad); // Default to 1 or 0 if no stock
+            } else {
+                salePricePerUnitInput.value = '';
+                saleQuantityInput.max = ''; // Clear max if no item selected
+                saleQuantityInput.value = '';
+            }
+        }
+
+        function setTodayDateForSaleForm() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+            const dd = String(today.getDate()).padStart(2, '0');
+            saleDateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+
+        async function handleAddSale(event) {
+            event.preventDefault();
+            showLoading(true); // Show loading spinner
+
+            if (!isAuthReady || !userId || !db) {
+                showToast('Autenticación o base de datos no listas. Por favor, espere o recargue la página.', 'error');
+                showLoading(false);
+                return;
+            }
+
+            if (!validateForm('add-sale-form')) {
+                showToast('Por favor, complete todos los campos obligatorios y asegúrese de que los valores numéricos sean válidos.', 'error');
+                showLoading(false);
+                return;
+            }
+
+            const selectedItemId = saleItemSelect.value;
+            const itemSold = inventoryData.find(item => item.id === selectedItemId);
+
+            if (!itemSold) {
+                showToast('Artículo seleccionado no encontrado en el inventario.', 'error');
+                showLoading(false);
+                return;
+            }
+
+            const quantitySold = parseInt(saleQuantityInput.value);
+
+            if (quantitySold > itemSold.cantidad) {
+                showToast(`No hay suficiente stock. Cantidad disponible: ${itemSold.cantidad}.`, 'error');
+                showLoading(false);
+                return;
+            }
+
+            const salePricePerUnit = parseFloat(salePricePerUnitInput.value);
+            // Use itemSold.costoNeto for profit calculation from the stored value
+            const profitGenerated = (salePricePerUnit - (itemSold.costoNeto || itemSold.costo)) * quantitySold; 
+
+            const newSale = {
+                itemId: selectedItemId,
+                itemName: `${itemSold.articulo} (${itemSold.marca} - ${itemSold.coleccion})`, // Store a descriptive name
+                quantitySold: quantitySold,
+                salePricePerUnit: salePricePerUnit,
+                saleDate: saleDateInput.value,
+                saleComments: saleCommentsInput.value,
+                profitGenerated: profitGenerated, // Store calculated profit
+                timestamp: new Date().toISOString() // For accurate sorting/tracking
+            };
+
+            try {
+                // 1. Add sale record
+                const salesCollectionRef = collection(db, `artifacts/${appId}/public/data/salesRecords`);
+                await addDoc(salesCollectionRef, newSale);
+                console.log("Sale recorded successfully.");
+
+                // 2. Update inventory item quantity
+                const newQuantityInStock = itemSold.cantidad - quantitySold;
+                const itemRef = doc(db, `artifacts/${appId}/public/data/sharedInventory`, selectedItemId);
+                await updateDoc(itemRef, { cantidad: newQuantityInStock });
+                console.log(`Inventory quantity for ${itemSold.articulo} updated to ${newQuantityInStock}`);
+
+                showToast('Venta registrada y stock actualizado exitosamente.', 'success');
+            } catch (error) {
+                console.error("Error recording sale or updating inventory:", error);
+                showToast(`Error al registrar la venta: ${getFirebaseErrorMessage(error)}.`, 'error');
+            } finally {
+                showLoading(false); // Hide loading spinner
+            }
+
+            addSaleForm.reset();
+            setTodayDateForSaleForm(); // Reset date to today
+            populateSaleFormItemSelect(); // Re-populate to show updated stock counts
+            saleQuantityInput.max = ''; // Clear max attribute
+            salePricePerUnitInput.value = ''; // Clear auto-filled price
+            // The message will auto-hide via showToast
+        }
+
+
+        // --- UPDATE QUANTITY FUNCTION (for inventory table +/- buttons) ---
+        async function updateQuantity(itemId, changeAmount) {
+            showLoading(true); // Show loading spinner
+            if (!isAuthReady || !userId || !db) {
+                console.error("User ID or Firestore DB is not available for quantity update.");
+                showLoading(false);
+                return;
+            }
+
+            const itemToUpdate = inventoryData.find(item => item.id === itemId);
+            if (!itemToUpdate) {
+                console.error("Item not found for update:", itemId);
+                showLoading(false);
+                return;
+            }
+
+            const newQuantity = Math.max(0, itemToUpdate.cantidad + changeAmount); // Ensure quantity doesn't go below 0
+
+            try {
+                const itemRef = doc(db, `artifacts/${appId}/public/data/sharedInventory`, itemId); 
+                await updateDoc(itemRef, { cantidad: newQuantity });
+                console.log(`Quantity for item ${itemId} updated to ${newQuantity}`);
+                showToast(`Cantidad de ${itemToUpdate.articulo} actualizada a ${newQuantity}.`, 'info');
+            } catch (error) {
+                console.error("Error updating quantity:", error);
+                showToast(`Error al actualizar la cantidad: ${getFirebaseErrorMessage(error)}.`, 'error');
+            } finally {
+                showLoading(false); // Hide loading spinner
+            }
+        }
+
+        // --- DELETE ITEM FUNCTION (for inventory table) ---
+        async function deleteItem(idToDelete) {
+            showLoading(true); // Show loading spinner
+            if (!isAuthReady || !userId || !db) {
+                console.error("User ID or Firestore DB is not available for deletion.");
+                showLoading(false);
+                return;
+            }
+            console.log(`Attempting to delete item with ID: ${idToDelete} from collection: artifacts/${appId}/public/data/sharedInventory`); // Log the ID being deleted
+            try {
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/sharedInventory`, idToDelete)); 
+                console.log("Document successfully deleted!");
+                showToast('Ítem eliminado exitosamente.', 'success');
+            } catch (error) {
+                console.error("Error removing document: ", error);
+                showToast(`Error al eliminar el ítem: ${getFirebaseErrorMessage(error)}.`, 'error');
+            } finally {
+                showLoading(false); // Hide loading spinner
+            }
+        }
+
+        // --- DELETE SALE FUNCTION (New) ---
+        async function deleteSale(saleIdToDelete) {
+            showLoading(true); // Show loading spinner
+            if (!isAuthReady || !userId || !db) {
+                console.error("User ID or Firestore DB is not available for sale deletion.");
+                showLoading(false);
+                return;
+            }
+
+            const saleRef = doc(db, `artifacts/${appId}/public/data/salesRecords`, saleIdToDelete);
+
+            try {
+                // 1. Get sale details to revert stock
+                const saleDoc = await getDoc(saleRef);
+                if (!saleDoc.exists()) {
+                    showToast('Registro de venta no encontrado.', 'error');
+                    showLoading(false);
+                    return;
+                }
+                const saleData = saleDoc.data();
+                const itemIdToRevert = saleData.itemId;
+                const quantityToRevert = saleData.quantitySold;
+
+                // 2. Delete the sale record
+                await deleteDoc(saleRef);
+                console.log("Sale record successfully deleted!");
+
+                // 3. Update inventory item: add quantity back
+                const itemToUpdate = inventoryData.find(item => item.id === itemIdToRevert);
+                if (itemToUpdate) {
+                    const newItemQuantity = itemToUpdate.cantidad + quantityToRevert;
+                    const itemInventoryRef = doc(db, `artifacts/${appId}/public/data/sharedInventory`, itemIdToRevert);
+                    await updateDoc(itemInventoryRef, { cantidad: newItemQuantity });
+                    console.log(`Stock for item ${itemToUpdate.articulo} reverted by ${quantityToRevert}. New quantity: ${newItemQuantity}`);
+                    showToast('Venta eliminada y stock revertido exitosamente.', 'success');
+                } else {
+                    console.warn(`Item with ID ${itemIdToRevert} not found in inventory to revert stock.`);
+                    showToast(`Venta eliminada, pero el artículo original ya no está en el inventario.`, 'warning');
+                }
+
+            } catch (error) {
+                console.error("Error deleting sale or reverting stock: ", error);
+                showToast(`Error al eliminar la venta: ${getFirebaseErrorMessage(error)}.`, 'error');
+            } finally {
+                showLoading(false); // Hide loading spinner
+            }
+        }
+
+
+        // --- UTILITY FUNCTIONS ---
+
+        // Function to show custom confirmation modal
+        function showConfirmationModal(message, onConfirm) {
+            modalMessage.textContent = message;
+            onConfirmCallback = onConfirm;
+            confirmationModal.classList.remove('hidden');
+        }
+
+        // Function to hide custom confirmation modal
+        function hideConfirmationModal() {
+            confirmationModal.classList.add('hidden');
+            onConfirmCallback = null;
+        }
+
+        // Function to show/hide loading spinner
+        function showLoading(isLoading) {
+            if (isLoading) {
+                loadingOverlay.classList.remove('hidden');
+            } else {
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        // Function to show toast messages
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.classList.add('toast-message', type);
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+
+            // Remove after animation (5s from CSS)
+            setTimeout(() => {
+                toast.remove();
+            }, 5000);
+        }
+
+        // Function to check for low stock and show alerts
+        function checkLowStockAlerts() {
+            const lowStockThreshold = 5; // Define your threshold
+            inventoryData.forEach(item => {
+                if (item.cantidad > 0 && item.cantidad < lowStockThreshold) {
+                    showToast(`¡Alerta de Stock Bajo! ${item.articulo} (${item.marca}) tiene ${item.cantidad} unidades restantes.`, 'warning');
+                } else if (item.cantidad === 0) {
+                    showToast(`¡Stock Agotado! ${item.articulo} (${item.marca}) no tiene unidades disponibles.`, 'error');
+                }
+            });
+        }
+
+
+        // Function to get user-friendly Firebase error messages
+        function getFirebaseErrorMessage(error) {
+            switch (error.code) {
+                case 'permission-denied':
+                    return 'Permiso denegado. Verifica las reglas de seguridad de Firestore.';
+                case 'unavailable':
+                    return 'Servicio no disponible. Verifica tu conexión a internet.';
+                case 'resource-exhausted':
+                    return 'Cuota de Firebase excedida. Intenta más tarde.';
+                case 'not-found':
+                    return 'Documento no encontrado.';
+                case 'auth/api-key-not-valid':
+                    return 'La clave API de Firebase no es válida. Verifica tu configuración en la consola de Firebase.';
+                case 'auth/network-request-failed':
+                    return 'Fallo en la solicitud de red. Verifica tu conexión a internet.';
+                default:
+                    return error.message || 'Error desconocido.';
+            }
+        }
+
+        // --- THEME TOGGLE FUNCTIONS ---
+        function toggleTheme() {
+            if (document.body.classList.contains('dark')) {
+                document.body.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.body.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+            // Re-render to apply theme-specific classes to dynamically generated content
+            renderAll();
+            renderSalesSection();
+            renderSalesCharts(); // Re-render charts to pick up theme changes
+        }
+
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark');
+            } else if (savedTheme === 'light') {
+                document.body.classList.remove('dark');
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                // If no preference, check system preference
+                document.body.classList.add('dark');
+            }
+            // Re-render to ensure all elements reflect the loaded theme
+            renderAll();
+            renderSalesSection();
+            renderSalesCharts(); // Re-render charts to pick up theme changes
+        }
+
+        // --- EXPORT TO CSV FUNCTION ---
+        function exportToCSV() {
+            if (inventoryData.length === 0) {
+                showToast('No hay datos en el inventario para exportar.', 'error');
+                return;
+            }
+
+            // Manually define the order of headers for CSV to match the table display order
+            const csvHeaders = [
+                'Marca', 'Colección', 'Expansión', 'Artículo', 'Comentarios', 'Cantidad', 
+                'Costo (USD)', 'Costo Neto (USD)', 'Venta (USD)', 'Venta (ARS)', 'Margen de Ganancia (USD)', 'Idioma', 'Estado', 'URL Imagen'
+            ];
+
+            // Map filteredData to CSV rows
+            const rows = inventoryData.map(item => {
+                // Ensure values are strings and handle commas if they exist in data
+                return [
+                    `"${item.marca ? item.marca.replace(/"/g, '""') : ''}"`,
+                    `"${item.coleccion ? item.coleccion.replace(/"/g, '""') : ''}"`,
+                    `"${item.expansion ? item.expansion.replace(/"/g, '""') : ''}"`,
+                    `"${item.articulo ? item.articulo.replace(/"/g, '""') : ''}"`,
+                    `"${item.comentarios ? item.comentarios.replace(/"/g, '""') : ''}"`,
+                    item.cantidad !== undefined ? item.cantidad : '',
+                    item.costo !== undefined ? item.costo.toFixed(2) : '',
+                    item.costoNeto !== undefined ? item.costoNeto.toFixed(2) : '', // Include costoNeto in export
+                    item.venta !== undefined ? item.venta.toFixed(2) : '',
+                    item.venta !== undefined ? (item.venta * (parseFloat(dolarBlueInput.value) || 1)).toFixed(2) : '',
+                    item.margenGanancia !== undefined ? item.margenGanancia.toFixed(2) : '',
+                    `"${item.idioma ? item.idioma.replace(/"/g, '""') : ''}"`,
+                    `"${item.estado ? item.estado.replace(/"/g, '""') : ''}"`,
+                    `"${item.imageUrl ? item.imageUrl.replace(/"/g, '""') : ''}"`
+                ].join(',');
+            });
+
+            const csvContent = "data:text/csv;charset=utf-8," 
+                               + csvHeaders.join(',') + '\n' 
+                               + rows.join('\n');
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "inventario_tcg.csv");
+            document.body.appendChild(link); // Required for Firefox
+            link.click();
+            document.body.removeChild(link); // Clean up
+            showToast('Datos exportados a inventario_tcg.csv', 'success');
+        }
+
+        // Expose functions to global scope for onclick (for table buttons)
+        window.updateQuantity = updateQuantity;
+        window.showConfirmationModal = showConfirmationModal; // Expose modal function
+        window.deleteSale = deleteSale; // Expose new deleteSale function
+        window.deleteItem = deleteItem; // Ensure deleteItem is also exposed
+        window.renderAll = renderAll; // Expose renderAll for oninput in HTML
+        window.showEditItemModal = showEditItemModal; // Expose edit modal function
+        window.hideEditItemModal = hideEditItemModal; // Expose hide edit modal function
+        window.updateEditCalculatedFields = updateEditCalculatedFields; // Expose for oninput in edit modal
+    </script>
+</body>
+</html>
